@@ -11,7 +11,7 @@
 
 <p align="center">
   Open-source, cross-platform document discovery and metadata leak analysis tool.<br>
-  Designed as a spiritual successor to <a href="https://github.com/elevenpaths/foca">FOCA</a> — without the Windows lock-in.
+  Designed as a spiritual successor to <a href="https://github.com/elevenpaths/foca">FOCA</a>, without the Windows lock-in.
 </p>
 
 <p align="center"><sub><a href="README.md">🇹🇷 Türkçe</a> · 🇬🇧 English</sub></p>
@@ -45,7 +45,7 @@
 ## What is this?
 
 [FOCA](https://github.com/elevenpaths/foca) was the go-to tool for metadata-based
-information leakage testing for years — but it's unmaintained now and
+information leakage testing for years, but it's unmaintained now and
 Windows-only. **MetaScout** rewrites the same idea (find documents published on
 a target site, extract their metadata, report what leaks) in Python: a fully
 command-line tool that installs the same way on macOS, Linux, and Windows.
@@ -69,12 +69,12 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **CLI and local web UI**: `metascout scan` from the terminal, or `metascout
   web` for a browser form
 - **Passive subdomain enumeration** via [crt.sh](https://crt.sh) (Certificate
-  Transparency logs) — no API key required, each subdomain gets scanned too
+  Transparency logs), no API key required, each subdomain gets scanned too
 - **Respects `robots.txt` by default** and sends an honest, non-spoofed User-Agent
 - **Concurrent downloads** with a size cap and sha256 deduplication
 - **Detailed HTML report** (dark theme, findings grouped by category) plus a
   **JSON report** for automation
-- No exotic dependencies — the only native component is `exiftool`, available
+- No exotic dependencies: the only native component is `exiftool`, available
   on every platform
 
 ## Installation
@@ -193,14 +193,14 @@ If both print version/help text without errors, you're set.
 > whichever `.venv` was active at the time. Open a new terminal, or run
 > `metascout` from outside the project directory, and you'll get `zsh:
 > command not found: metascout` (or `'metascout' is not recognized...` on
-> Windows) — that's not broken, the venv just isn't active. Either activate
+> Windows). That's not broken, the venv just isn't active. Either activate
 > it each time (`source .venv/bin/activate`) or install it globally below.
 
 ### Global install (pipx)
 
 If you'd rather run `metascout` from anywhere without activating a venv every
-time, use [pipx](https://pipx.pypa.io/) — it installs the package into its own
-isolated environment but puts the command on your PATH:
+time, use [pipx](https://pipx.pypa.io/): it installs the package into its own
+isolated environment but puts the command on your PATH.
 
 ```bash
 # macOS
@@ -233,7 +233,7 @@ directory without activating a venv.
 metascout scan example.com
 ```
 
-By default this uses site crawling (`crawl`) and `sitemap.xml` — no API key
+By default this uses site crawling (`crawl`) and `sitemap.xml`, no API key
 needed. Results are written to `./metascout_output/report.html` and `report.json`.
 
 ```bash
@@ -247,7 +247,7 @@ metascout scan example.com \
 ## Scanning multiple targets
 
 Scan several domains belonging to the same organization in one run and get a
-**single merged report** — no need to run the tool repeatedly and stitch
+**single merged report**, no need to run the tool repeatedly and stitch
 reports together yourself:
 
 ```bash
@@ -281,7 +281,7 @@ metascout web
 ```
 
 This opens a local UI at `http://127.0.0.1:8765/` (launches in your browser
-automatically) — enter your targets (one per line), file extensions, discovery
+automatically). Enter your targets (one per line), file extensions, discovery
 engines, and the subdomain toggle, then hit "Taramayı başlat" (Start scan).
 When the scan finishes, the report opens right in the browser; it's also saved
 under `--output-dir` (default `./metascout_output/web-<timestamp>/`) as
@@ -291,7 +291,7 @@ under `--output-dir` (default `./metascout_output/web-<timestamp>/`) as
 metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output
 ```
 
-The UI only listens on `127.0.0.1` (change with `--host`) — don't expose it to
+The UI only listens on `127.0.0.1` (change with `--host`). Don't expose it to
 the internet. To use the `google`/`brave` checkboxes, the matching API
 keys need to be set via environment variable or `.env` (see [Search engine API
 keys](#search-engine-api-keys-optional)).
@@ -306,7 +306,7 @@ subdomain is scanned with the same document-discovery engines (crawl/sitemap/goo
 metascout scan example.com --subdomains --max-subdomains 30
 ```
 
-`crt.sh` can be slow or rate-limited at times — in that case the scan silently
+`crt.sh` can be slow or rate-limited at times. In that case the scan silently
 continues with an empty subdomain list; the scan of the main domain is unaffected.
 
 ## Search engine API keys (optional)
@@ -322,7 +322,7 @@ cp .env.example .env
 > **Security note:** `.env` is already in [.gitignore](.gitignore), so even if
 > you keep it in this repo folder, `git add .` won't pick it up. Still, the
 > safest setup is to keep your real keys in a **separate folder outside the
-> git repository entirely** — e.g. `~/metascout-workspace/.env`. If you
+> git repository entirely**, e.g. `~/metascout-workspace/.env`. If you
 > [install metascout globally with pipx](#global-install-pipx), `metascout
 > scan` reads the `.env` from whatever directory you run it in, so you can run
 > scans without ever touching the source repo.
@@ -371,7 +371,7 @@ metascout web --help
 
 | Option | Default | Description |
 |---|---|---|
-| `--host` | `127.0.0.1` | Local only — don't expose to the internet |
+| `--host` | `127.0.0.1` | Local only, don't expose to the internet |
 | `--port` | `8765` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where scan runs get saved |
 | `--open-browser` / `--no-open-browser` | on | Auto-open the browser on startup |
@@ -420,7 +420,7 @@ pytest
 ## Troubleshooting
 
 **`zsh: command not found: metascout`** (or `'metascout' is not recognized...` on PowerShell)
-`metascout` only exists inside the `.venv` you installed it into — it's not
+`metascout` only exists inside the `.venv` you installed it into. It's not
 callable from any random terminal unless that venv is active. Two fixes:
 1. `cd` into the project and activate the venv: `cd /path/to/metascout && source .venv/bin/activate` (Windows: `.venv\Scripts\Activate.ps1`)
 2. Or do a [global install with pipx](#global-install-pipx) to make the command available everywhere.
@@ -430,7 +430,7 @@ ExifTool isn't installed or isn't on PATH. Follow the step for your platform
 under [Installation](#installation), then verify with `exiftool -ver`.
 
 **On Windows, `exiftool(-k).exe` works but `exiftool` doesn't**
-The file in the zip is named `exiftool(-k).exe` — rename it to `exiftool.exe`
+The file in the zip is named `exiftool(-k).exe`. Rename it to `exiftool.exe`
 and place it in a folder on PATH (see the Windows install steps above).
 
 **`No documents discovered`**
@@ -450,7 +450,7 @@ The corresponding API key/CSE id isn't set. See [Search engine API keys](#search
 
 This tool is built for **your own systems** or targets you have **written
 authorization** to test. It respects `robots.txt` by default and sends an
-honest, non-spoofed User-Agent (`MetaScout/0.1`) — so a target's operators can
+honest, non-spoofed User-Agent (`MetaScout/0.1`), so a target's operators can
 see recon traffic in their logs and block it if they want to. Using it against
 systems you're not authorized to test may be illegal; that responsibility is
 entirely on the user.

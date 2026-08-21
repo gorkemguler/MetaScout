@@ -11,7 +11,7 @@
 
 <p align="center">
   Açık kaynak, çapraz platform belge keşfi ve metadata sızıntı analiz aracı.<br>
-  <a href="https://github.com/elevenpaths/foca">FOCA</a>'nın yerini alacak şekilde tasarlandı — ama Windows'a bağımlı değil.
+  <a href="https://github.com/elevenpaths/foca">FOCA</a>'nın yerini alacak şekilde tasarlandı, ama Windows'a bağımlı değil.
 </p>
 
 <p align="center"><sub>🇹🇷 Türkçe · <a href="README.en.md">🇬🇧 English</a></sub></p>
@@ -45,7 +45,7 @@
 ## Nedir bu?
 
 [FOCA](https://github.com/elevenpaths/foca), yıllarca metadata tabanlı bilgi
-sızıntısı testlerinin standart aracı oldu — ama artık bakımı yapılmıyor ve
+sızıntısı testlerinin standart aracı oldu, ama artık bakımı yapılmıyor ve
 sadece Windows'ta çalışıyor. **MetaScout**, aynı fikri (hedef sitede yayınlanmış
 belgeleri bul, metadata'sını çıkar, sızan bilgiyi raporla) Python ile yeniden
 yazan, tamamen komut satırından çalışan, macOS/Linux/Windows'ta aynı şekilde
@@ -75,7 +75,7 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **Eşzamanlı indirme**, boyut sınırı ve sha256 ile tekilleştirme
 - **Detaylı HTML rapor** (koyu tema, kategori bazlı bulgu tabloları) + otomasyon
   için **JSON rapor**
-- Harici bağımlılık yok — tek native bileşen `exiftool`, o da tüm platformlarda mevcut
+- Harici bağımlılık yok: tek native bileşen `exiftool`, o da tüm platformlarda mevcut
 
 ## Kurulum
 
@@ -192,15 +192,15 @@ metascout scan --help
 > **Dikkat:** Yukarıdaki `pip install -e .` komutu `metascout` komutunu yalnızca
 > o an aktif olan `.venv` sanal ortamına kurar. Yeni bir terminal açtığınızda ya
 > da proje klasörünün dışındayken `metascout` çalıştırırsanız `zsh: command not
-> found: metascout` / `'metascout' is not recognized...` hatası alırsınız —
-> bozukluk değil, venv'in aktif olmamasından kaynaklanır. Çözüm için aşağıya
+> found: metascout` / `'metascout' is not recognized...` hatası alırsınız.
+> Bu bir bozukluk değil, venv'in aktif olmamasından kaynaklanır. Çözüm için aşağıya
 > bakın veya her seferinde `source .venv/bin/activate` çalıştırın.
 
 ### Global kurulum (pipx)
 
 Her terminalde venv aktive etmeden, sisteminizin her yerinden `metascout`
-komutunu çalıştırmak isterseniz [pipx](https://pipx.pypa.io/) kullanın —
-paketi kendi izole ortamına kurar ama komutu PATH'e ekler:
+komutunu çalıştırmak isterseniz [pipx](https://pipx.pypa.io/) kullanın:
+paketi kendi izole ortamına kurar ama komutu PATH'e ekler.
 
 ```bash
 # macOS
@@ -233,7 +233,7 @@ komutu hangi dizinde olursanız olun, venv aktive etmeden çalışır.
 metascout scan example.com
 ```
 
-Varsayılan olarak site taraması (`crawl`) ve `sitemap.xml` kullanılır — API
+Varsayılan olarak site taraması (`crawl`) ve `sitemap.xml` kullanılır, API
 anahtarı gerekmez. Sonuçlar `./metascout_output/report.html` ve `report.json`
 dosyalarına yazılır.
 
@@ -248,8 +248,8 @@ metascout scan example.com \
 ## Çoklu hedef taraması
 
 Bir kuruma ait birden fazla domaini tek seferde tarayıp **tek bir raporda**
-birleştirebilirsiniz — arka arkaya çalıştırıp raporları elle birleştirmenize
-gerek yok:
+birleştirebilirsiniz. Arka arkaya çalıştırıp raporları elle birleştirmenize
+gerek kalmaz:
 
 ```bash
 metascout scan example.com example.org another-example.net
@@ -282,7 +282,7 @@ metascout web
 ```
 
 Bu, `http://127.0.0.1:8765/` adresinde yerel bir arayüz açar (tarayıcınızda
-otomatik açılır) — hedefleri (birden fazla, her satıra bir tane), dosya
+otomatik açılır). Hedefleri (birden fazla, her satıra bir tane), dosya
 uzantılarını, keşif motorlarını ve subdomain seçeneğini forma girip "Taramayı
 başlat"a basmanız yeterli. Tarama bitince sonuç raporu doğrudan tarayıcıda
 açılır; ayrıca `--output-dir` altına (varsayılan `./metascout_output/web-<tarih>/`)
@@ -292,8 +292,8 @@ açılır; ayrıca `--output-dir` altına (varsayılan `./metascout_output/web-<
 metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output
 ```
 
-Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir) —
-internete açık bırakmayın. `google`/`brave` motorlarını forma işaretlemek
+Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir).
+İnternete açık bırakmayın. `google`/`brave` motorlarını forma işaretlemek
 için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
 olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
 
@@ -323,7 +323,7 @@ cp .env.example .env
 > **Güvenlik notu:** `.env` zaten [.gitignore](.gitignore)'da, yani bu repo
 > klasöründe tutsanız bile normal `git add .` ile commit'e girmez. Yine de en
 > güvenli yöntem, gerçek anahtarlarınızı **git deposunun dışındaki ayrı bir
-> klasörde** tutmaktır — örn. `~/metascout-calisma/.env`. `metascout`'u
+> klasörde** tutmaktır, örn. `~/metascout-calisma/.env`. `metascout`'u
 > [pipx ile global kurarsanız](#global-kurulum-pipx), `metascout scan` komutu
 > hangi klasörden çalıştırılırsa o klasördeki `.env`'i okur; böylece kaynak kod
 > deposuna hiç dokunmadan taramalarınızı çalıştırabilirsiniz.
@@ -373,7 +373,7 @@ metascout web --help
 
 | Seçenek | Varsayılan | Açıklama |
 |---|---|---|
-| `--host` | `127.0.0.1` | Yalnızca yerel — internete açmayın |
+| `--host` | `127.0.0.1` | Yalnızca yerel, internete açmayın |
 | `--port` | `8765` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Taramaların kaydedileceği klasör |
 | `--open-browser` / `--no-open-browser` | açık | Başlarken tarayıcıyı otomatik aç |
@@ -432,7 +432,7 @@ ExifTool kurulu değil ya da PATH'te değil. [Kurulum](#kurulum) bölümündeki
 platformunuza uygun adımı izleyin, ardından `exiftool -ver` ile doğrulayın.
 
 **Windows'ta `exiftool(-k).exe` çalışıyor ama `exiftool` çalışmıyor**
-İndirdiğiniz zip'teki dosya adı `exiftool(-k).exe` — bunu `exiftool.exe` olarak
+İndirdiğiniz zip'teki dosya adı `exiftool(-k).exe`. Bunu `exiftool.exe` olarak
 yeniden adlandırmanız ve PATH'te bir klasöre koymanız gerekiyor (yukarıdaki
 Windows kurulum adımlarına bakın).
 
@@ -454,7 +454,7 @@ bölümüne bakın.
 
 Bu araç yalnızca **kendi sisteminiz** veya **yazılı izniniz olan** hedefler için
 tasarlanmıştır. Varsayılan olarak `robots.txt` kurallarına uyar ve isteklerinde
-kendini gizlemeyen dürüst bir User-Agent (`MetaScout/0.1`) gönderir — yani hedef
+kendini gizlemeyen dürüst bir User-Agent (`MetaScout/0.1`) gönderir. Yani hedef
 site operatörü recon trafiğini loglarında görüp isterse engelleyebilir.
 İzniniz olmayan sistemlere karşı kullanmak yasa dışı olabilir; sorumluluk
 tamamen kullanıcıya aittir.
