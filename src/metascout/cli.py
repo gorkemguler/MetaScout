@@ -4,7 +4,7 @@ import os
 import sys
 
 import click
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.table import Table
 
@@ -86,7 +86,10 @@ def _collect_targets(targets: tuple[str, ...], targets_file: str | None) -> list
 @click.group()
 def main() -> None:
     """MetaScout — document discovery and metadata reconnaissance tool."""
-    load_dotenv()
+    # load_dotenv() alone searches upward from this installed module's file
+    # location, not the user's current directory — usecwd=True makes it find
+    # a .env in whatever directory `metascout` is actually run from.
+    load_dotenv(find_dotenv(usecwd=True))
 
 
 @main.command()
