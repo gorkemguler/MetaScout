@@ -48,7 +48,7 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
             else:
                 log(f"! unknown engine '{engine}', skipping")
                 continue
-        except ValueError as exc:
+        except (ValueError, RuntimeError) as exc:
             log(f"! {engine} skipped for {host}: {exc}")
             continue
 
