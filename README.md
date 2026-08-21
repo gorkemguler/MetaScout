@@ -338,6 +338,11 @@ zaman istediğiniz motorları kendiniz listelemeniz gerekir.
   üzerinden bir arama motoru oluşturun (tüm web'i arayacak şekilde ayarlayın) ve
   [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview)
   için bir API anahtarı alın. Ücretsiz kota günde 100 sorgu.
+
+  Kota yetmiyorsa `GOOGLE_API_KEY`'e **virgülle ayırarak birden fazla anahtar**
+  girebilirsiniz (farklı Google Cloud projelerinden, aynı `GOOGLE_CSE_ID`'yi
+  paylaşan anahtarlar): `GOOGLE_API_KEY=anahtar1,anahtar2,anahtar3`. Bir
+  anahtarın kotası biterse tarama otomatik olarak bir sonrakine geçer.
 - **Brave**: [brave.com/search/api](https://brave.com/search/api/) üzerinden bir
   abonelik (ücretsiz "Data for AI" katmanı dahil) oluşturup `X-Subscription-Token`
   anahtarınızı alın.

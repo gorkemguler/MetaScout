@@ -107,7 +107,7 @@ def main() -> None:
 @click.option("--ignore-robots", is_flag=True, default=False, help="Ignore robots.txt during crawling (use only with explicit authorization).")
 @click.option("--subdomains/--no-subdomains", default=False, help="Enumerate subdomains via crt.sh (Certificate Transparency logs) and scan each one too.")
 @click.option("--max-subdomains", default=20, show_default=True, help="Maximum subdomains to scan per target when --subdomains is set.")
-@click.option("--google-api-key", envvar="GOOGLE_API_KEY", default=None)
+@click.option("--google-api-key", envvar="GOOGLE_API_KEY", default=None, help="One key, or comma-separated keys to rotate through when one runs out of quota.")
 @click.option("--google-cse-id", envvar="GOOGLE_CSE_ID", default=None)
 @click.option("--brave-api-key", envvar="BRAVE_API_KEY", default=None)
 @click.option("--json-report/--no-json-report", default=True)

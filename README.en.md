@@ -336,6 +336,11 @@ overrides this auto behavior, so you'd list the engines you want yourself.
   (configure it to search the entire web) and get an API key for the
   [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview).
   Free tier: 100 queries/day.
+
+  If that's not enough, set `GOOGLE_API_KEY` to a **comma-separated list of
+  keys** (e.g. from separate Google Cloud projects that share the same
+  `GOOGLE_CSE_ID`): `GOOGLE_API_KEY=key1,key2,key3`. When one key's quota
+  runs out, the scan automatically rotates to the next one.
 - **Brave**: sign up at [brave.com/search/api](https://brave.com/search/api/)
   (a free "Data for AI" tier is available) and get your `X-Subscription-Token`.
 

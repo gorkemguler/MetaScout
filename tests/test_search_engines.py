@@ -65,3 +65,30 @@ def test_google_dork_search_degrades_gracefully_after_partial_results():
         docs = google_dork_search("example.com", ["pdf", "docx"], api_key="fake-key", cse_id="fake-cx")
 
     assert [d.url for d in docs] == ["https://example.com/a.pdf"]
+
+
+def test_google_dork_search_rotates_to_next_key_on_quota_exhaustion():
+    quota_error = {"error": {"status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded"}}
+    page1 = {"items": [{"link": "https://example.com/a.pdf"}], "queries": {}}
+
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(params["key"])
+        if params["key"] == "key-one":
+            return _fake_response(quota_error, status_code=429)
+        return _fake_response(page1)
+
+    with patch("requests.Session.get", side_effect=fake_get):
+        docs = google_dork_search("example.com", ["pdf"], api_key="key-one, key-two", cse_id="fake-cx")
+
+    assert [d.url for d in docs] == ["https://example.com/a.pdf"]
+    assert calls == ["key-one", "key-two"]
+
+
+def test_google_dork_search_raises_after_all_keys_exhausted():
+    quota_error = {"error": {"status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded"}}
+
+    with patch("requests.Session.get", return_value=_fake_response(quota_error, status_code=429)):
+        with pytest.raises(RuntimeError, match="tried 2 key"):
+            google_dork_search("example.com", ["pdf"], api_key="key-one,key-two", cse_id="fake-cx")

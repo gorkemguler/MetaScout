@@ -53,39 +53,54 @@ def google_dork_search(
     The free tier caps at 100 queries/day and 10 results/query (max start=91),
     so this stays well within default quotas for a handful of filetypes.
 
-    Raises RuntimeError if the very first request fails (e.g. quota exhausted,
-    bad key) so the caller can surface a clear reason instead of silently
-    getting zero results. A failure after some results were already collected
-    is treated as "no more available" and returns what was found so far.
+    `api_key` may be a comma-separated list of keys (e.g. from separate GCP
+    projects sharing the same `cse_id`). When one is rejected for quota/auth
+    reasons (HTTP 403/429), the next key is used automatically and the scan
+    continues without losing progress.
+
+    Raises RuntimeError if every key fails on the very first request (e.g.
+    all quotas exhausted, bad key) so the caller can surface a clear reason
+    instead of silently getting zero results. A failure after some results
+    were already collected is treated as "no more available" and returns
+    what was found so far.
     """
-    if not api_key or not cse_id:
+    keys = [k.strip() for k in api_key.split(",")] if api_key else []
+    keys = [k for k in keys if k]
+    if not keys or not cse_id:
         raise ValueError("google_dork_search requires api_key and cse_id")
 
     session = requests.Session()
     found: dict[str, DiscoveredDocument] = {}
-    got_any_result = False
+    key_idx = 0
+
+    def _request(params: dict) -> requests.Response:
+        nonlocal key_idx
+        while True:
+            resp = session.get(_GOOGLE_ENDPOINT, params={**params, "key": keys[key_idx]}, timeout=timeout)
+            if resp.status_code == 200 or resp.status_code not in (403, 429) or key_idx == len(keys) - 1:
+                return resp
+            key_idx += 1
 
     for ft in filetypes:
         start = 1
         collected = 0
         while collected < max_results_per_type and start <= 91:
             params = {
-                "key": api_key,
                 "cx": cse_id,
                 "q": f"site:{target} filetype:{ft}",
                 "start": start,
                 "num": min(10, max_results_per_type - collected),
             }
-            resp = session.get(_GOOGLE_ENDPOINT, params=params, timeout=timeout)
+            resp = _request(params)
             if resp.status_code != 200:
-                if not got_any_result:
-                    raise RuntimeError(f"Google Custom Search API error (HTTP {resp.status_code}): {_http_error_detail(resp)}")
+                if not found:
+                    keys_note = f" (tried {len(keys)} key(s))" if len(keys) > 1 else ""
+                    raise RuntimeError(f"Google Custom Search API error (HTTP {resp.status_code}){keys_note}: {_http_error_detail(resp)}")
                 break
             data = resp.json()
             items = data.get("items", [])
             if not items:
                 break
-            got_any_result = True
             for item in items:
                 link = item.get("link")
                 if link and link not in found:
