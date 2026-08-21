@@ -319,6 +319,11 @@ cp .env.example .env
 # fill in GOOGLE_API_KEY, GOOGLE_CSE_ID and/or BRAVE_API_KEY
 ```
 
+Once a key is set, the matching `google`/`brave` engine turns on **automatically**,
+no extra step needed (added to the CLI's default `--engines` list, and its
+checkbox is pre-checked in the web UI). Passing `--engines` explicitly
+overrides this auto behavior, so you'd list the engines you want yourself.
+
 > **Security note:** `.env` is already in [.gitignore](.gitignore), so even if
 > you keep it in this repo folder, `git add .` won't pick it up. Still, the
 > safest setup is to keep your real keys in a **separate folder outside the
@@ -352,7 +357,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
-| `--engines` | `crawl,sitemap` | Comma-separated: `crawl,sitemap,google,brave` |
+| `--engines` | `crawl,sitemap` (+`google`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,google,brave` |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
 | `--max-subdomains` | `20` | Maximum subdomains to scan |
 | `--max-docs` | `50` | Maximum documents to download and analyze |

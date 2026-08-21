@@ -59,6 +59,19 @@ def _print_summary(findings) -> None:
         console.print(by_target)
 
 
+def _default_engines() -> str:
+    """crawl+sitemap always; auto-add google/brave when their API keys are
+    already configured (env var or .env), so setting up a key is enough to
+    use it without also remembering to pass --engines.
+    """
+    engines = ["crawl", "sitemap"]
+    if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
+        engines.append("google")
+    if os.environ.get("BRAVE_API_KEY"):
+        engines.append("brave")
+    return ",".join(engines)
+
+
 def _collect_targets(targets: tuple[str, ...], targets_file: str | None) -> list[str]:
     all_targets = list(targets)
     if targets_file:
@@ -80,7 +93,7 @@ def main() -> None:
 @click.argument("targets", nargs=-1)
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default="crawl,sitemap", show_default=True, help="Comma-separated: crawl,sitemap,google,brave")
+@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,google,brave. Defaults to crawl,sitemap plus google/brave automatically if their API keys are set.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
 @click.option("--max-crawl-depth", default=3, show_default=True)

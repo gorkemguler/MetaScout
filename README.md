@@ -320,6 +320,12 @@ cp .env.example .env
 # .env dosyasına GOOGLE_API_KEY, GOOGLE_CSE_ID ve/veya BRAVE_API_KEY girin
 ```
 
+Anahtarları girdiğinizde `google`/`brave` motorları **ayrıca bir şey yapmanıza
+gerek kalmadan** otomatik devreye girer (CLI'de varsayılan `--engines`
+listesine eklenir, web arayüzünde ilgili kutucuk otomatik işaretlenir).
+`--engines` ile elle motor seçerseniz bu otomatik davranış geçersiz olur, o
+zaman istediğiniz motorları kendiniz listelemeniz gerekir.
+
 > **Güvenlik notu:** `.env` zaten [.gitignore](.gitignore)'da, yani bu repo
 > klasöründe tutsanız bile normal `git add .` ile commit'e girmez. Yine de en
 > güvenli yöntem, gerçek anahtarlarınızı **git deposunun dışındaki ayrı bir
@@ -354,7 +360,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` | `crawl,sitemap,google,brave` arasından virgülle liste |
+| `--engines` | `crawl,sitemap` (+`google`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,google,brave` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |

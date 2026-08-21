@@ -88,10 +88,10 @@ _FORM_BODY = """
   <div class="checks">
     <label><input type="checkbox" name="engines" value="crawl" checked> crawl</label>
     <label><input type="checkbox" name="engines" value="sitemap" checked> sitemap</label>
-    <label><input type="checkbox" name="engines" value="google"> google</label>
-    <label><input type="checkbox" name="engines" value="brave"> brave</label>
+    <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
+    <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
   </div>
-  <div class="hint">google/brave için ilgili API anahtarları ortam değişkeni ya da .env üzerinden tanımlı olmalı.</div>
+  <div class="hint">google/brave için ilgili API anahtarları ortam değişkeni ya da .env üzerinden tanımlı olmalı; anahtar bulunduğunda kutucuk otomatik işaretlenir.</div>
 
   <label><input type="checkbox" name="subdomains"> Subdomain keşfi (crt.sh)</label>
 
@@ -125,11 +125,17 @@ def _render_form(error: str | None = None, targets_value: str = "", filetypes_va
         if exiftool_available()
         else '<div class="warn">exiftool bulunamadı — kurmadan tarama çalışmaz. README\'deki kurulum adımlarına bakın.</div>'
     )
+    google_ready = bool(os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"))
+    brave_ready = bool(os.environ.get("BRAVE_API_KEY"))
     body = _FORM_BODY.format(
         error_block=error_block,
         exiftool_block=exiftool_block,
         targets_value=targets_value,
         filetypes_value=filetypes_value or ",".join(DEFAULT_FILETYPES),
+        google_checked="checked" if google_ready else "",
+        brave_checked="checked" if brave_ready else "",
+        google_hint=" (anahtar bulundu)" if google_ready else "",
+        brave_hint=" (anahtar bulundu)" if brave_ready else "",
     )
     return _PAGE_HEAD + body + _PAGE_TAIL
 
