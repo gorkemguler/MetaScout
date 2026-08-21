@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MetaScout Report — {{ findings.targets | join(", ") }}</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #161925; --border: #2a2f42; --text: #e6e8f0;
+    --muted: #9aa1b4; --accent: #6ea8fe; --warn: #f2a65a; --bad: #f26d6d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 32px 40px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  main { padding: 24px 40px 60px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .num { font-size: 26px; font-weight: 700; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  section { margin-bottom: 36px; }
+  section h2 { font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .count { color: var(--accent); font-weight: 600; }
+  .doclist { color: var(--muted); font-size: 12px; }
+  .doclist a { color: var(--muted); }
+  .empty { color: var(--muted); font-style: italic; padding: 12px 0; }
+  .status-ok { color: #7dd88f; }
+  .status-err { color: var(--bad); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { color: var(--muted); font-size: 12px; padding: 24px 40px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MetaScout — Metadata Reconnaissance Report</h1>
+  <div class="meta">Targets: <strong>{{ findings.targets | join(", ") }}</strong> &middot; Scanned: {{ findings.scanned_at.isoformat() }}</div>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="num">{{ findings.documents | length }}</div><div class="label">Documents found</div></div>
+    <div class="card"><div class="num">{{ findings.documents_with_metadata }}</div><div class="label">With metadata</div></div>
+    <div class="card"><div class="num">{{ findings.usernames | length }}</div><div class="label">Usernames</div></div>
+    <div class="card"><div class="num">{{ findings.emails | length }}</div><div class="label">Emails</div></div>
+    <div class="card"><div class="num">{{ findings.software | length }}</div><div class="label">Software</div></div>
+    <div class="card"><div class="num">{{ findings.operating_systems | length }}</div><div class="label">Operating systems</div></div>
+    <div class="card"><div class="num">{{ findings.internal_paths | length }}</div><div class="label">Internal paths</div></div>
+    <div class="card"><div class="num">{{ findings.servers_and_printers | length }}</div><div class="label">Servers / printers</div></div>
+  </div>
+
+  {% if findings.targets | length > 1 %}
+  <section>
+    <h2>Targets</h2>
+    <table>
+      <thead><tr><th>Target</th><th>Documents found</th></tr></thead>
+      <tbody>
+      {% for t, count in findings.documents_by_target.items() %}
+        <tr><td class="value">{{ t }}</td><td class="count">{{ count }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% macro finding_table(bucket, value_label) %}
+  {% if bucket %}
+  <table>
+    <thead><tr><th>{{ value_label }}</th><th>Docs</th><th>Found in</th></tr></thead>
+    <tbody>
+    {% for value, f in bucket.items() | sort %}
+      <tr>
+        <td class="value">{{ value }}</td>
+        <td class="count">{{ f.document_urls | length }}</td>
+        <td class="doclist">
+          {% for u in f.document_urls[:3] %}<a href="{{ u }}" target="_blank" rel="noopener">{{ u | truncate(50) }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+          {% if f.document_urls | length > 3 %}<span> +{{ f.document_urls | length - 3 }} more</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty">No findings in this category.</div>
+  {% endif %}
+  {% endmacro %}
+
+  <section>
+    <h2>Usernames</h2>
+    {{ finding_table(findings.usernames, "Username") }}
+  </section>
+  <section>
+    <h2>Emails</h2>
+    {{ finding_table(findings.emails, "Email") }}
+  </section>
+  <section>
+    <h2>Software &amp; versions</h2>
+    {{ finding_table(findings.software, "Software") }}
+  </section>
+  <section>
+    <h2>Operating systems</h2>
+    {{ finding_table(findings.operating_systems, "OS") }}
+  </section>
+  <section>
+    <h2>Internal paths</h2>
+    {{ finding_table(findings.internal_paths, "Path") }}
+  </section>
+  <section>
+    <h2>Servers &amp; printers</h2>
+    {{ finding_table(findings.servers_and_printers, "Server / printer") }}
+  </section>
+
+  <section>
+    <h2>Documents</h2>
+    <table>
+      <thead><tr><th>URL</th><th>Type</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for d in findings.documents %}
+        <tr>
+          <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url }}</a></td>
+          <td>{{ d.filetype }}</td>
+          <td>
+            {% if d.error %}<span class="status-err">error: {{ d.error }}</span>
+            {% else %}<span class="status-ok">ok</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</main>
+<footer>Generated by MetaScout &middot; for authorized security assessments only.</footer>
+</body>
+</html>

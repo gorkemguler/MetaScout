@@ -1,0 +1,74 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f1117"/>
+      <stop offset="1" stop-color="#141726"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="620" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8bb4ff"/>
+      <stop offset="1" stop-color="#9d8bfb"/>
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0" y1="0" x2="140" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6ea8fe"/>
+      <stop offset="1" stop-color="#8b7dfb"/>
+    </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#2a2f42" opacity="0.55"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <rect width="1200" height="300" fill="url(#dots)"/>
+  <rect x="0" y="0" width="1200" height="300" fill="none" stroke="#2a2f42" stroke-width="2"/>
+
+  <!-- document + magnifier icon -->
+  <g transform="translate(70,68)">
+    <rect x="0" y="0" width="118" height="150" rx="10" fill="#161925" stroke="url(#iconGrad)" stroke-width="3"/>
+    <line x1="20" y1="36" x2="88" y2="36" stroke="#6ea8fe" stroke-width="5" stroke-linecap="round" opacity="0.85"/>
+    <line x1="20" y1="58" x2="98" y2="58" stroke="#6ea8fe" stroke-width="5" stroke-linecap="round" opacity="0.6"/>
+    <line x1="20" y1="80" x2="70" y2="80" stroke="#6ea8fe" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+    <line x1="20" y1="102" x2="88" y2="102" stroke="#6ea8fe" stroke-width="5" stroke-linecap="round" opacity="0.3"/>
+    <g transform="translate(70,96)">
+      <circle cx="34" cy="34" r="30" fill="#0f1117" stroke="url(#iconGrad)" stroke-width="6"/>
+      <line x1="56" y1="56" x2="80" y2="80" stroke="url(#iconGrad)" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="34" cy="34" r="30" fill="none" stroke="#e6e8f0" stroke-width="1" opacity="0.15"/>
+    </g>
+  </g>
+
+  <!-- title -->
+  <g transform="translate(250,0)">
+    <text x="0" y="140" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="66" font-weight="800" fill="url(#titleGrad)" letter-spacing="-1">MetaScout</text>
+    <text x="4" y="178" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" fill="#9aa1b4">Document discovery &amp; metadata reconnaissance</text>
+    <text x="4" y="204" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#6b7185">macOS &#183; Linux &#183; Windows &#183; open source alternative to FOCA</text>
+  </g>
+
+  <!-- filetype chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="600">
+    <g transform="translate(250,232)">
+      <rect width="66" height="30" rx="7" fill="#161925" stroke="#2a2f42"/>
+      <text x="33" y="20" text-anchor="middle" fill="#6ea8fe">PDF</text>
+    </g>
+    <g transform="translate(326,232)">
+      <rect width="76" height="30" rx="7" fill="#161925" stroke="#2a2f42"/>
+      <text x="38" y="20" text-anchor="middle" fill="#8b7dfb">DOCX</text>
+    </g>
+    <g transform="translate(412,232)">
+      <rect width="74" height="30" rx="7" fill="#161925" stroke="#2a2f42"/>
+      <text x="37" y="20" text-anchor="middle" fill="#7dd88f">XLSX</text>
+    </g>
+    <g transform="translate(496,232)">
+      <rect width="74" height="30" rx="7" fill="#161925" stroke="#2a2f42"/>
+      <text x="37" y="20" text-anchor="middle" fill="#f2a65a">PPTX</text>
+    </g>
+  </g>
+
+  <!-- right-side status readout -->
+  <g transform="translate(940,60)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#6b7185">
+    <text x="0" y="0">$ metascout scan target.tld \</text>
+    <text x="14" y="20" fill="#9aa1b4">--subdomains</text>
+    <text x="0" y="52" fill="#7dd88f">&#8250; 214 documents discovered</text>
+    <text x="0" y="74" fill="#7dd88f">&#8250; metadata extracted (exiftool)</text>
+    <text x="0" y="96" fill="#f2a65a">&#8250; 18 usernames, 9 servers found</text>
+    <text x="0" y="118" fill="#6ea8fe">&#8250; report.html written</text>
+  </g>
+</svg>
