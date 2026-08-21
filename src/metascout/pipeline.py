@@ -35,15 +35,18 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
                 )
             elif engine == "google":
+                # Google's API itself caps at ~100 results/query (start<=91),
+                # so there's no point asking for more than that per filetype.
                 docs = google_dork_search(
                     host, cfg.filetypes,
                     api_key=cfg.google_api_key, cse_id=cfg.google_cse_id,
-                    timeout=cfg.request_timeout,
+                    timeout=cfg.request_timeout, max_results_per_type=min(cfg.max_docs, 100),
                 )
             elif engine == "brave":
                 docs = brave_dork_search(
                     host, cfg.filetypes,
                     api_key=cfg.brave_api_key, timeout=cfg.request_timeout,
+                    max_results_per_type=min(cfg.max_docs, 100),
                 )
             else:
                 log(f"! unknown engine '{engine}', skipping")
