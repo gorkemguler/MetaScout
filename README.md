@@ -64,7 +64,7 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 ## Özellikler
 
 - **Üç belge keşif yöntemi**: doğrudan site taraması (crawl), `sitemap.xml`/`robots.txt`
-  ayrıştırma, ve isteğe bağlı arama motoru dork'ları (Google/Brave `site: filetype:`)
+  ayrıştırma, ve isteğe bağlı arama motoru dork'ları (Google/Serper/Brave `site: filetype:`)
 - **Çoklu hedef taraması**: bir kuruma ait onlarca domaini tek komutta/tek formda
   tarayıp tek bir raporda birleştirir
 - **Hem CLI hem yerel web arayüzü**: `metascout scan` ile terminalden, `metascout
@@ -293,7 +293,7 @@ metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output
 ```
 
 Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir).
-İnternete açık bırakmayın. `google`/`brave` motorlarını forma işaretlemek
+İnternete açık bırakmayın. `google`/`serper`/`brave` motorlarını forma işaretlemek
 için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
 olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
 
@@ -301,7 +301,7 @@ olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarl
 
 `--subdomains` ile [crt.sh](https://crt.sh) (Certificate Transparency log arama,
 API anahtarı gerekmez) üzerinden pasif subdomain keşfi yapılır; bulunan her
-subdomain de aynı belge-keşif motorlarıyla (crawl/sitemap/google/brave) taranır:
+subdomain de aynı belge-keşif motorlarıyla (crawl/sitemap/google/serper/brave) taranır:
 
 ```bash
 metascout scan example.com --subdomains --max-subdomains 30
@@ -312,7 +312,7 @@ sessizce boş subdomain listesiyle devam eder, ana domain taraması etkilenmez.
 
 ## Arama motoru API anahtarları (opsiyonel)
 
-`google` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
+`google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
 dork aramaları yapar; bunlar için API anahtarı gerekir:
 
 ```bash
@@ -320,7 +320,7 @@ cp .env.example .env
 # .env dosyasına GOOGLE_API_KEY, GOOGLE_CSE_ID ve/veya BRAVE_API_KEY girin
 ```
 
-Anahtarları girdiğinizde `google`/`brave` motorları **ayrıca bir şey yapmanıza
+Anahtarları girdiğinizde `google`/`serper`/`brave` motorları **ayrıca bir şey yapmanıza
 gerek kalmadan** otomatik devreye girer (CLI'de varsayılan `--engines`
 listesine eklenir, web arayüzünde ilgili kutucuk otomatik işaretlenir).
 `--engines` ile elle motor seçerseniz bu otomatik davranış geçersiz olur, o
@@ -343,12 +343,25 @@ zaman istediğiniz motorları kendiniz listelemeniz gerekir.
   girebilirsiniz (farklı Google Cloud projelerinden, aynı `GOOGLE_CSE_ID`'yi
   paylaşan anahtarlar): `GOOGLE_API_KEY=anahtar1,anahtar2,anahtar3`. Bir
   anahtarın kotası biterse tarama otomatik olarak bir sonrakine geçer.
+
+  > ⚠️ **Google bu API'yi 1 Ocak 2027'de tamamen kapatıyor** ve şu anda **yeni
+  > oluşturulan Google Cloud projelerini zaten reddediyor** — konsolda API
+  > "etkin" görünse bile `403 PERMISSION_DENIED` hatası alıyorsanız (yeni bir
+  > proje/anahtarsa) bu sizin ayarınızdan değil, Google'ın yeni müşteri
+  > kısıtlamasından kaynaklanıyor, düzeltilecek bir şey yok. Aşağıdaki
+  > **Serper**'a geçin.
+- **Serper**: [serper.dev](https://serper.dev) üzerinden ücretsiz bir hesap açın
+  ve API anahtarınızı alın. Google'ın kendi API'si gibi resmi bir Google ürünü
+  değil, ama **gerçek Google arama sonuçlarını** JSON olarak döndüren üçüncü
+  taraf bir servis — Google API'sinin yerini almak için önerilen yol budur.
+  Kayıt olunca ücretsiz kredi tanımlanıyor; güncel miktarı ve fiyatlandırmayı
+  [serper.dev](https://serper.dev) üzerinden kontrol edin, zamanla değişebilir.
 - **Brave**: [brave.com/search/api](https://brave.com/search/api/) üzerinden bir
   abonelik (ücretsiz "Data for AI" katmanı dahil) oluşturup `X-Subscription-Token`
   anahtarınızı alın.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,google,brave
+metascout scan example.com --engines crawl,sitemap,google,serper,brave
 ```
 
 ## Tüm CLI seçenekleri
@@ -365,7 +378,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` (+`google`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,google,brave` arasından virgülle liste |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,google,serper,brave` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |
@@ -376,7 +389,7 @@ metascout web --help
 | `--max-download-mb` | `50` | Belge başına azami indirme boyutu (MB) |
 | `--output-dir` | `./metascout_output` | Çıktı klasörü |
 | `--ignore-robots` | kapalı | `robots.txt`'i yok say (yalnızca açık izniniz varsa) |
-| `--google-api-key`, `--google-cse-id`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
+| `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 
@@ -409,7 +422,7 @@ src/metascout/
 ├── discovery/
 │   ├── crawler.py         doğrudan site taraması (robots.txt uyumlu)
 │   ├── sitemap.py         sitemap.xml / sitemap index ayrıştırma
-│   ├── search_engines.py  Google/Brave dork araması
+│   ├── search_engines.py  Google/Serper/Brave dork araması
 │   └── subdomains.py      crt.sh üzerinden pasif subdomain keşfi
 ├── downloader.py           eşzamanlı indirme, boyut sınırı, sha256
 ├── metadata/
@@ -450,14 +463,14 @@ Windows kurulum adımlarına bakın).
 **`No documents discovered`**
 Hedefte seçtiğiniz uzantılarda (varsayılan: `pdf,doc,docx,...`) herkese açık
 belge yok, ya da `robots.txt` crawler'ı engelliyor olabilir. `--engines
-crawl,sitemap,google,brave` ile daha geniş kapsam deneyin ya da (yalnızca
+crawl,sitemap,google,serper,brave` ile daha geniş kapsam deneyin ya da (yalnızca
 yetkiniz varsa) `--ignore-robots` kullanın.
 
 **crt.sh yanıt vermiyor / yavaş**
 Servis zaman zaman rate-limit uygular; tarama sessizce boş subdomain listesiyle
 devam eder. Birkaç dakika sonra tekrar deneyin.
 
-**`Google`/`Brave` motoru "skipped" uyarısı veriyor**
+**`Google`/`Serper`/`Brave` motoru "skipped" uyarısı veriyor**
 İlgili API anahtarı/CSE id tanımlı değil. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 bölümüne bakın.
 

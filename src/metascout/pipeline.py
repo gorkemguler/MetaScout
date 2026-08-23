@@ -4,7 +4,7 @@ import os
 from typing import Callable
 
 from .config import ScanConfig
-from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, sitemap_search
+from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, serper_dork_search, sitemap_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
@@ -42,6 +42,12 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                     api_key=cfg.google_api_key, cse_id=cfg.google_cse_id,
                     timeout=cfg.request_timeout, max_results_per_type=min(cfg.max_docs, 100),
                 )
+            elif engine == "serper":
+                docs = serper_dork_search(
+                    host, cfg.filetypes,
+                    api_key=cfg.serper_api_key, timeout=cfg.request_timeout,
+                    max_results_per_type=min(cfg.max_docs, 100),
+                )
             elif engine == "brave":
                 docs = brave_dork_search(
                     host, cfg.filetypes,
@@ -62,6 +68,13 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
 
 
 def discover_all(cfg: ScanConfig, log: LogFn = _noop_log) -> list[DiscoveredDocument]:
+    if "google" in cfg.engines:
+        log(
+            "! google: Google, Custom Search JSON API'yi 1 Ocak 2027'de kapatıyor ve "
+            "yeni Google Cloud projelerini şimdiden reddediyor (PERMISSION_DENIED). "
+            "Sorun yaşarsanız 'serper' motorunu deneyin (SERPER_API_KEY, https://serper.dev)."
+        )
+
     found: dict[str, DiscoveredDocument] = {}
 
     for target in cfg.targets:

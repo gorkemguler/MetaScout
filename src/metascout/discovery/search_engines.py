@@ -9,6 +9,7 @@ from ..models import DiscoveredDocument, DiscoverySource
 
 _GOOGLE_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
 _BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+_SERPER_ENDPOINT = "https://google.serper.dev/search"
 
 # Brave's free tier is rate-limited to ~1 request/second; without a delay,
 # looping over several filetypes back-to-back trips it and every request
@@ -49,6 +50,11 @@ def google_dork_search(
 ) -> list[DiscoveredDocument]:
     """Use Google Programmable Search Engine (Custom Search JSON API) to run
     'site:target filetype:X' dorks. Requires a Google API key and CSE id.
+
+    Google is discontinuing this API on 2027-01-01, and has already closed it
+    to new customers — newly created Google Cloud projects get a permanent
+    403 PERMISSION_DENIED regardless of configuration. If this keeps failing,
+    try the `serper` engine instead (see serper_dork_search below).
 
     The free tier caps at 100 queries/day and 10 results/query (max start=91),
     so this stays well within default quotas for a handful of filetypes.
@@ -173,6 +179,63 @@ def brave_dork_search(
             collected += len(items)
             page += 1
             if len(items) < count:
+                break
+
+    return list(found.values())
+
+
+def serper_dork_search(
+    target: str,
+    filetypes: list[str],
+    *,
+    api_key: str,
+    max_results_per_type: int = 30,
+    timeout: int = 15,
+) -> list[DiscoveredDocument]:
+    """Use Serper.dev to run 'site:target filetype:X' dorks against real
+    Google search results. Requires a Serper API key: https://serper.dev
+
+    This is a third-party service that re-serves Google's public search
+    results — not an official Google product. It exists as a practical
+    stand-in now that Google's own Custom Search JSON API is being
+    discontinued (2027-01-01) and already rejects new Google Cloud projects.
+
+    Raises RuntimeError if the very first request fails (e.g. bad key, no
+    credit left) so the caller can surface a clear reason instead of
+    silently getting zero results. A failure after some results were
+    already collected is treated as "no more available" and returns what
+    was found so far.
+    """
+    if not api_key:
+        raise ValueError("serper_dork_search requires api_key")
+
+    session = requests.Session()
+    session.headers["X-API-KEY"] = api_key
+    session.headers["Content-Type"] = "application/json"
+    found: dict[str, DiscoveredDocument] = {}
+
+    for ft in filetypes:
+        page = 1
+        collected = 0
+        while collected < max_results_per_type:
+            num = min(100, max_results_per_type - collected)
+            body = {"q": f"site:{target} filetype:{ft}", "num": num, "page": page}
+            resp = session.post(_SERPER_ENDPOINT, json=body, timeout=timeout)
+            if resp.status_code != 200:
+                if not found:
+                    raise RuntimeError(f"Serper API error (HTTP {resp.status_code}): {_http_error_detail(resp)}")
+                break
+            data = resp.json()
+            items = data.get("organic", [])
+            if not items:
+                break
+            for item in items:
+                link = item.get("link")
+                if link and link not in found:
+                    found[link] = DiscoveredDocument(url=link, source=DiscoverySource.SERPER, filetype=_ext_of(link) or ft)
+            collected += len(items)
+            page += 1
+            if len(items) < num:
                 break
 
     return list(found.values())

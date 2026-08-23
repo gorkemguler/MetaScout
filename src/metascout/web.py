@@ -89,9 +89,12 @@ _FORM_BODY = """
     <label><input type="checkbox" name="engines" value="crawl" checked> crawl</label>
     <label><input type="checkbox" name="engines" value="sitemap" checked> sitemap</label>
     <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
+    <label><input type="checkbox" name="engines" value="serper" {serper_checked}> serper{serper_hint}</label>
     <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
   </div>
-  <div class="hint">google/brave için ilgili API anahtarları ortam değişkeni ya da .env üzerinden tanımlı olmalı; anahtar bulunduğunda kutucuk otomatik işaretlenir.</div>
+  <div class="hint">google/serper/brave için ilgili API anahtarları ortam değişkeni ya da .env üzerinden tanımlı olmalı; anahtar bulunduğunda kutucuk otomatik işaretlenir.
+  Google, Custom Search API'yi 1 Ocak 2027'de kapatıyor ve yeni Google Cloud projelerini şimdiden reddediyor —
+  sorun yaşarsanız <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a>'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin).</div>
 
   <label><input type="checkbox" name="subdomains"> Subdomain keşfi (crt.sh)</label>
 
@@ -126,6 +129,7 @@ def _render_form(error: str | None = None, targets_value: str = "", filetypes_va
         else '<div class="warn">exiftool bulunamadı — kurmadan tarama çalışmaz. README\'deki kurulum adımlarına bakın.</div>'
     )
     google_ready = bool(os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"))
+    serper_ready = bool(os.environ.get("SERPER_API_KEY"))
     brave_ready = bool(os.environ.get("BRAVE_API_KEY"))
     body = _FORM_BODY.format(
         error_block=error_block,
@@ -133,8 +137,10 @@ def _render_form(error: str | None = None, targets_value: str = "", filetypes_va
         targets_value=targets_value,
         filetypes_value=filetypes_value or ",".join(DEFAULT_FILETYPES),
         google_checked="checked" if google_ready else "",
+        serper_checked="checked" if serper_ready else "",
         brave_checked="checked" if brave_ready else "",
         google_hint=" (anahtar bulundu)" if google_ready else "",
+        serper_hint=" (anahtar bulundu)" if serper_ready else "",
         brave_hint=" (anahtar bulundu)" if brave_ready else "",
     )
     return _PAGE_HEAD + body + _PAGE_TAIL
@@ -175,6 +181,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             include_subdomains=subdomains,
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
+            serper_api_key=os.environ.get("SERPER_API_KEY"),
             brave_api_key=os.environ.get("BRAVE_API_KEY"),
         )
 

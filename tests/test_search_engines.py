@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from metascout.discovery.search_engines import brave_dork_search, google_dork_search
+from metascout.discovery.search_engines import brave_dork_search, google_dork_search, serper_dork_search
 
 
 def _fake_response(payload, status_code=200):
@@ -92,3 +92,27 @@ def test_google_dork_search_raises_after_all_keys_exhausted():
     with patch("requests.Session.get", return_value=_fake_response(quota_error, status_code=429)):
         with pytest.raises(RuntimeError, match="tried 2 key"):
             google_dork_search("example.com", ["pdf"], api_key="key-one,key-two", cse_id="fake-cx")
+
+
+def test_serper_dork_search_requires_api_key():
+    with pytest.raises(ValueError):
+        serper_dork_search("example.com", ["pdf"], api_key="")
+
+
+def test_serper_dork_search_collects_and_dedupes_results():
+    page1 = {"organic": [{"link": "https://example.com/a.pdf"}, {"link": "https://example.com/b.pdf"}]}
+
+    with patch("requests.Session.post", return_value=_fake_response(page1)):
+        docs = serper_dork_search("example.com", ["pdf"], api_key="fake-key", max_results_per_type=30)
+
+    urls = {d.url for d in docs}
+    assert urls == {"https://example.com/a.pdf", "https://example.com/b.pdf"}
+    assert all(d.source == "serper" for d in docs)
+
+
+def test_serper_dork_search_raises_with_detail_on_first_request_failure():
+    error_payload = {"message": "Not enough credits"}
+
+    with patch("requests.Session.post", return_value=_fake_response(error_payload, status_code=403)):
+        with pytest.raises(RuntimeError, match="credits"):
+            serper_dork_search("example.com", ["pdf"], api_key="fake-key")

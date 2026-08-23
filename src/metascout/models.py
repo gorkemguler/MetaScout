@@ -7,6 +7,7 @@ from enum import Enum
 
 class DiscoverySource(str, Enum):
     GOOGLE = "google"
+    SERPER = "serper"
     BRAVE = "brave"
     CRAWL = "crawl"
     SITEMAP = "sitemap"

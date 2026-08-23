@@ -63,7 +63,7 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 ## Features
 
 - **Three document discovery methods**: direct site crawling, `sitemap.xml`/`robots.txt`
-  parsing, and optional search engine dorking (Google/Brave `site: filetype:`)
+  parsing, and optional search engine dorking (Google/Serper/Brave `site: filetype:`)
 - **Multi-target scanning**: scan dozens of domains belonging to one organization
   in a single run and get one merged report
 - **CLI and local web UI**: `metascout scan` from the terminal, or `metascout
@@ -292,7 +292,7 @@ metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output
 ```
 
 The UI only listens on `127.0.0.1` (change with `--host`). Don't expose it to
-the internet. To use the `google`/`brave` checkboxes, the matching API
+the internet. To use the `google`/`serper`/`brave` checkboxes, the matching API
 keys need to be set via environment variable or `.env` (see [Search engine API
 keys](#search-engine-api-keys-optional)).
 
@@ -300,7 +300,7 @@ keys](#search-engine-api-keys-optional)).
 
 `--subdomains` performs passive subdomain discovery via [crt.sh](https://crt.sh)
 (Certificate Transparency log search, no API key required); every discovered
-subdomain is scanned with the same document-discovery engines (crawl/sitemap/google/brave):
+subdomain is scanned with the same document-discovery engines (crawl/sitemap/google/serper/brave):
 
 ```bash
 metascout scan example.com --subdomains --max-subdomains 30
@@ -311,7 +311,7 @@ continues with an empty subdomain list; the scan of the main domain is unaffecte
 
 ## Search engine API keys (optional)
 
-The `google` and `brave` engines run classic FOCA-style
+The `google`, `serper`, and `brave` engines run classic FOCA-style
 `site:target filetype:pdf` dork searches; each needs an API key:
 
 ```bash
@@ -319,7 +319,7 @@ cp .env.example .env
 # fill in GOOGLE_API_KEY, GOOGLE_CSE_ID and/or BRAVE_API_KEY
 ```
 
-Once a key is set, the matching `google`/`brave` engine turns on **automatically**,
+Once a key is set, the matching `google`/`serper`/`brave` engine turns on **automatically**,
 no extra step needed (added to the CLI's default `--engines` list, and its
 checkbox is pre-checked in the web UI). Passing `--engines` explicitly
 overrides this auto behavior, so you'd list the engines you want yourself.
@@ -341,11 +341,25 @@ overrides this auto behavior, so you'd list the engines you want yourself.
   keys** (e.g. from separate Google Cloud projects that share the same
   `GOOGLE_CSE_ID`): `GOOGLE_API_KEY=key1,key2,key3`. When one key's quota
   runs out, the scan automatically rotates to the next one.
+
+  > ⚠️ **Google is shutting this API down entirely on 2027-01-01**, and it
+  > already rejects newly created Google Cloud projects — if you're getting
+  > `403 PERMISSION_DENIED` on a new project/key even though the console
+  > shows the API as "enabled," that's Google blocking new customers, not a
+  > misconfiguration on your end. There's nothing to fix; use **Serper**
+  > below instead.
+- **Serper**: sign up for free at [serper.dev](https://serper.dev) and grab
+  your API key. Not an official Google product like the API above — it's a
+  third-party service that returns **real Google search results** as JSON,
+  and is the recommended replacement now that Google's own API is being
+  discontinued. Free credit is included on signup; check
+  [serper.dev](https://serper.dev) for the current amount and pricing, since
+  it can change.
 - **Brave**: sign up at [brave.com/search/api](https://brave.com/search/api/)
   (a free "Data for AI" tier is available) and get your `X-Subscription-Token`.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,google,brave
+metascout scan example.com --engines crawl,sitemap,google,serper,brave
 ```
 
 ## Full CLI reference
@@ -362,7 +376,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
-| `--engines` | `crawl,sitemap` (+`google`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,google,brave` |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,google,serper,brave` |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
 | `--max-subdomains` | `20` | Maximum subdomains to scan |
 | `--max-docs` | `50` | Maximum documents to download and analyze |
@@ -373,7 +387,7 @@ metascout web --help
 | `--max-download-mb` | `50` | Max download size per document (MB) |
 | `--output-dir` | `./metascout_output` | Output directory |
 | `--ignore-robots` | off | Ignore `robots.txt` (only with explicit authorization) |
-| `--google-api-key`, `--google-cse-id`, `--brave-api-key` | – | Can also be set via env var or `.env` |
+| `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Can also be set via env var or `.env` |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 
@@ -406,7 +420,7 @@ src/metascout/
 ├── discovery/
 │   ├── crawler.py         direct site crawling (robots.txt aware)
 │   ├── sitemap.py         sitemap.xml / sitemap index parsing
-│   ├── search_engines.py  Google/Brave dork search
+│   ├── search_engines.py  Google/Serper/Brave dork search
 │   └── subdomains.py      passive subdomain discovery via crt.sh
 ├── downloader.py           concurrent downloads, size cap, sha256
 ├── metadata/
@@ -446,14 +460,14 @@ and place it in a folder on PATH (see the Windows install steps above).
 **`No documents discovered`**
 The target has no publicly linked documents matching your extensions
 (default: `pdf,doc,docx,...`), or `robots.txt` is blocking the crawler. Try a
-wider net with `--engines crawl,sitemap,google,brave`, or (only if you're
+wider net with `--engines crawl,sitemap,google,serper,brave`, or (only if you're
 authorized) `--ignore-robots`.
 
 **crt.sh is unresponsive / slow**
 The service rate-limits occasionally; the scan silently continues with an
 empty subdomain list. Try again in a few minutes.
 
-**`Google`/`Brave` engine prints a "skipped" warning**
+**`Google`/`Serper`/`Brave` engine prints a "skipped" warning**
 The corresponding API key/CSE id isn't set. See [Search engine API keys](#search-engine-api-keys-optional).
 
 ## Responsible use

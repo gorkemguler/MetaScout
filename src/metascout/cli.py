@@ -60,13 +60,15 @@ def _print_summary(findings) -> None:
 
 
 def _default_engines() -> str:
-    """crawl+sitemap always; auto-add google/brave when their API keys are
-    already configured (env var or .env), so setting up a key is enough to
-    use it without also remembering to pass --engines.
+    """crawl+sitemap always; auto-add google/serper/brave when their API keys
+    are already configured (env var or .env), so setting up a key is enough
+    to use it without also remembering to pass --engines.
     """
     engines = ["crawl", "sitemap"]
     if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
         engines.append("google")
+    if os.environ.get("SERPER_API_KEY"):
+        engines.append("serper")
     if os.environ.get("BRAVE_API_KEY"):
         engines.append("brave")
     return ",".join(engines)
@@ -96,7 +98,7 @@ def main() -> None:
 @click.argument("targets", nargs=-1)
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,google,brave. Defaults to crawl,sitemap plus google/brave automatically if their API keys are set.")
+@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,google,serper,brave. Defaults to crawl,sitemap plus google/serper/brave automatically if their API keys are set.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
 @click.option("--max-crawl-depth", default=3, show_default=True)
@@ -109,6 +111,7 @@ def main() -> None:
 @click.option("--max-subdomains", default=20, show_default=True, help="Maximum subdomains to scan per target when --subdomains is set.")
 @click.option("--google-api-key", envvar="GOOGLE_API_KEY", default=None, help="One key, or comma-separated keys to rotate through when one runs out of quota.")
 @click.option("--google-cse-id", envvar="GOOGLE_CSE_ID", default=None)
+@click.option("--serper-api-key", envvar="SERPER_API_KEY", default=None, help="Serper.dev API key — a third-party Google SERP API, useful now that Google's own Custom Search API is being discontinued.")
 @click.option("--brave-api-key", envvar="BRAVE_API_KEY", default=None)
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)
@@ -116,7 +119,7 @@ def scan(
     targets: tuple[str, ...], targets_file: str | None, filetypes: str, engines: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
-    google_api_key: str | None, google_cse_id: str | None,
+    google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
@@ -150,6 +153,7 @@ def scan(
         max_subdomains=max_subdomains,
         google_api_key=google_api_key,
         google_cse_id=google_cse_id,
+        serper_api_key=serper_api_key,
         brave_api_key=brave_api_key,
     )
 

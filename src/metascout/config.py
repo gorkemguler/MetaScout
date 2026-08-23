@@ -27,4 +27,5 @@ class ScanConfig:
     max_subdomains: int = 20
     google_api_key: str | None = None
     google_cse_id: str | None = None
+    serper_api_key: str | None = None
     brave_api_key: str | None = None
