@@ -200,6 +200,11 @@ def serper_dork_search(
     stand-in now that Google's own Custom Search JSON API is being
     discontinued (2027-01-01) and already rejects new Google Cloud projects.
 
+    Free-tier Serper accounts reject `num` above 10 per request with a 400
+    "Query pattern not allowed for free accounts" error, so requests are
+    capped at 10 and paginated via `page` instead — this also works fine on
+    paid accounts, just in more (still free) round trips.
+
     Raises RuntimeError if the very first request fails (e.g. bad key, no
     credit left) so the caller can surface a clear reason instead of
     silently getting zero results. A failure after some results were
@@ -218,7 +223,7 @@ def serper_dork_search(
         page = 1
         collected = 0
         while collected < max_results_per_type:
-            num = min(100, max_results_per_type - collected)
+            num = min(10, max_results_per_type - collected)
             body = {"q": f"site:{target} filetype:{ft}", "num": num, "page": page}
             resp = session.post(_SERPER_ENDPOINT, json=body, timeout=timeout)
             if resp.status_code != 200:

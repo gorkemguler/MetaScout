@@ -110,6 +110,25 @@ def test_serper_dork_search_collects_and_dedupes_results():
     assert all(d.source == "serper" for d in docs)
 
 
+def test_serper_dork_search_never_requests_more_than_10_results_per_page():
+    # Free-tier Serper accounts reject num > 10 with a 400 "Query pattern
+    # not allowed for free accounts" error, so this must stay paginated.
+    page1 = {"organic": [{"link": f"https://example.com/{i}.pdf"} for i in range(10)]}
+    page2 = {"organic": [{"link": "https://example.com/extra.pdf"}]}
+
+    seen_nums = []
+
+    def fake_post(url, json, timeout):
+        seen_nums.append(json["num"])
+        return _fake_response(page1 if json["page"] == 1 else page2)
+
+    with patch("requests.Session.post", side_effect=fake_post):
+        docs = serper_dork_search("example.com", ["pdf"], api_key="fake-key", max_results_per_type=25)
+
+    assert all(n <= 10 for n in seen_nums)
+    assert len(docs) == 11
+
+
 def test_serper_dork_search_raises_with_detail_on_first_request_failure():
     error_payload = {"message": "Not enough credits"}
 
