@@ -115,12 +115,13 @@ def main() -> None:
 @click.option("--brave-api-key", envvar="BRAVE_API_KEY", default=None)
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)
+@click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Language for the HTML report.")
 def scan(
     targets: tuple[str, ...], targets_file: str | None, filetypes: str, engines: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
-    brave_api_key: str | None, json_report: bool, html_report: bool,
+    brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -183,7 +184,7 @@ def scan(
     if html_report:
         html_path = os.path.join(cfg.output_dir, "report.html")
         with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(render_html_report(findings))
+            fh.write(render_html_report(findings, lang=report_lang))
         console.print(f"[green]HTML report:[/green] {html_path}")
 
 

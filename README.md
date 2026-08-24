@@ -10,85 +10,85 @@
 </p>
 
 <p align="center">
-  Açık kaynak, çapraz platform belge keşfi ve metadata sızıntı analiz aracı.<br>
-  <a href="https://github.com/elevenpaths/foca">FOCA</a>'nın yerini alacak şekilde tasarlandı, ama Windows'a bağımlı değil.
+  Open-source, cross-platform document discovery and metadata leak analysis tool.<br>
+  Designed as a spiritual successor to <a href="https://github.com/elevenpaths/foca">FOCA</a>, without the Windows lock-in.
 </p>
 
-<p align="center"><sub>🇹🇷 Türkçe · <a href="README.en.md">🇬🇧 English</a></sub></p>
+<p align="center"><sub>🇬🇧 English · <a href="README.tr.md">🇹🇷 Türkçe</a></sub></p>
 
 ---
 
-## İçindekiler
+## Table of contents
 
-- [Nedir bu?](#nedir-bu)
-- [Özellikler](#özellikler)
-- [Kurulum](#kurulum)
-  - [Gereksinimler](#gereksinimler)
+- [What is this?](#what-is-this)
+- [Features](#features)
+- [Installation](#installation)
+  - [Requirements](#requirements)
   - [macOS](#macos)
   - [Linux](#linux)
   - [Windows](#windows)
-  - [Kurulumu doğrulama](#kurulumu-doğrulama)
-  - [Global kurulum (pipx)](#global-kurulum-pipx)
-- [Hızlı başlangıç](#hızlı-başlangıç)
-- [Çoklu hedef taraması](#çoklu-hedef-taraması)
-- [Web arayüzü](#web-arayüzü)
-- [Subdomain taraması](#subdomain-taraması)
-- [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
-- [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
-- [Çıktı yapısı](#çıktı-yapısı)
-- [Mimari](#mimari)
-- [Test](#test)
-- [Sorun giderme](#sorun-giderme)
-- [Etik kullanım](#etik-kullanım)
-- [Lisans](#lisans)
+  - [Verify the install](#verify-the-install)
+  - [Global install (pipx)](#global-install-pipx)
+- [Quick start](#quick-start)
+- [Scanning multiple targets](#scanning-multiple-targets)
+- [Web UI](#web-ui)
+- [Subdomain enumeration](#subdomain-enumeration)
+- [Search engine API keys](#search-engine-api-keys-optional)
+- [Full CLI reference](#full-cli-reference)
+- [Output layout](#output-layout)
+- [Architecture](#architecture)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Responsible use](#responsible-use)
+- [License](#license)
 
-## Nedir bu?
+## What is this?
 
-[FOCA](https://github.com/elevenpaths/foca), yıllarca metadata tabanlı bilgi
-sızıntısı testlerinin standart aracı oldu, ama artık bakımı yapılmıyor ve
-sadece Windows'ta çalışıyor. **MetaScout**, aynı fikri (hedef sitede yayınlanmış
-belgeleri bul, metadata'sını çıkar, sızan bilgiyi raporla) Python ile yeniden
-yazan, tamamen komut satırından çalışan, macOS/Linux/Windows'ta aynı şekilde
-kurulan bir alternatif.
+[FOCA](https://github.com/elevenpaths/foca) was the go-to tool for metadata-based
+information leakage testing for years, but it's unmaintained now and
+Windows-only. **MetaScout** rewrites the same idea (find documents published on
+a target site, extract their metadata, report what leaks) in Python: a fully
+command-line tool that installs the same way on macOS, Linux, and Windows.
 
-Bir hedefte yayınlanmış PDF/Office belgelerini keşfeder, indirir, her birinin
-metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları raporlar:
+It discovers PDF/Office documents published on a target, downloads them,
+extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 
-- **Kullanıcı adları** (belge yazarları, son düzenleyenler, ev dizini yolları)
-- **E-posta adresleri**
-- **Yazılım / sürüm bilgisi** (Office sürümü, PDF üretici yazılımı vb.)
-- **İşletim sistemi** ipuçları
-- **İç dosya yolları** (`C:\Users\...`, ağ paylaşımları)
-- **Sunucu / yazıcı isimleri** (UNC yolları, `\\server\share`)
+- **Usernames** (document authors, last-modified-by, home directory paths)
+- **Email addresses**
+- **Software / version info** (Office build, PDF producer, etc.)
+- **Operating system** hints
+- **Internal file paths** (`C:\Users\...`, network shares)
+- **Server / printer names** (UNC paths, `\\server\share`)
 
-## Özellikler
+## Features
 
-- **Üç belge keşif yöntemi**: doğrudan site taraması (crawl), `sitemap.xml`/`robots.txt`
-  ayrıştırma, ve isteğe bağlı arama motoru dork'ları (Google/Serper/Brave `site: filetype:`)
-- **Çoklu hedef taraması**: bir kuruma ait onlarca domaini tek komutta/tek formda
-  tarayıp tek bir raporda birleştirir
-- **Hem CLI hem yerel web arayüzü**: `metascout scan` ile terminalden, `metascout
-  web` ile tarayıcıdan form doldurarak
-- **Pasif subdomain keşfi**: [crt.sh](https://crt.sh) (Certificate Transparency
-  logları) üzerinden API anahtarı gerektirmeden subdomain bulur, her birini de tarar
-- **`robots.txt`'e saygılı** varsayılan davranış, dürüst bir User-Agent gönderir
-- **Eşzamanlı indirme**, boyut sınırı ve sha256 ile tekilleştirme
-- **Detaylı HTML rapor** (koyu tema, kategori bazlı bulgu tabloları) + otomasyon
-  için **JSON rapor**
-- Harici bağımlılık yok: tek native bileşen `exiftool`, o da tüm platformlarda mevcut
+- **Three document discovery methods**: direct site crawling, `sitemap.xml`/`robots.txt`
+  parsing, and optional search engine dorking (Google/Serper/Brave `site: filetype:`)
+- **Multi-target scanning**: scan dozens of domains belonging to one organization
+  in a single run and get one merged report
+- **CLI and local web UI**: `metascout scan` from the terminal, or `metascout
+  web` for a browser form
+- **Passive subdomain enumeration** via [crt.sh](https://crt.sh) (Certificate
+  Transparency logs), no API key required, each subdomain gets scanned too
+- **Respects `robots.txt` by default** and sends an honest, non-spoofed User-Agent
+- **Concurrent downloads** with a size cap and sha256 deduplication
+- **Detailed HTML report** (dark theme, findings grouped by category, English
+  or Turkish) plus a **JSON report** for automation
+- No exotic dependencies: the only native component is `exiftool`, available
+  on every platform
 
-## Kurulum
+## Installation
 
-### Gereksinimler
+### Requirements
 
-- Python 3.10 veya üzeri
-- [ExifTool](https://exiftool.org/) (metadata çıkarımı için zorunlu)
-- Git (opsiyonel, repoyu klonlamak için)
+- Python 3.10 or newer
+- [ExifTool](https://exiftool.org/) (required for metadata extraction)
+- Git (optional, to clone the repo)
 
 ### macOS
 
 ```bash
-# Homebrew yoksa: https://brew.sh
+# No Homebrew? https://brew.sh
 brew install exiftool python@3.12 git
 
 git clone https://github.com/gorkemguler/metascout.git
@@ -98,7 +98,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-MacPorts kullanıyorsanız `exiftool` yerine `sudo port install p5-image-exiftool`.
+On MacPorts, use `sudo port install p5-image-exiftool` instead.
 
 ### Linux
 
@@ -141,28 +141,28 @@ pip install -e .
 
 ### Windows
 
-**1. Python'u kurun**
+**1. Install Python**
 
-[python.org/downloads](https://www.python.org/downloads/) üzerinden Python 3.10+
-indirin. Kurulum ekranında **"Add python.exe to PATH"** kutucuğunu mutlaka işaretleyin.
+Download Python 3.10+ from [python.org/downloads](https://www.python.org/downloads/).
+On the installer screen, make sure **"Add python.exe to PATH"** is checked.
 
-**2. ExifTool'u kurun** (üç seçenekten biri)
+**2. Install ExifTool** (pick one)
 
-- **Chocolatey ile** (yönetici olarak PowerShell'de):
+- **Chocolatey** (in an elevated PowerShell):
   ```powershell
   choco install exiftool
   ```
-- **Scoop ile**:
+- **Scoop**:
   ```powershell
   scoop install exiftool
   ```
-- **Manuel**: [exiftool.org](https://exiftool.org/) sayfasından "Windows Executable"
-  zip'ini indirin, içindeki `exiftool(-k).exe` dosyasını `exiftool.exe` olarak yeniden
-  adlandırıp `C:\Windows\` gibi PATH'te olan bir klasöre kopyalayın, ya da dosyanın
-  bulunduğu klasörü sistem PATH değişkenine ekleyin (`Ayarlar › Sistem › Gelişmiş
-  sistem ayarları › Ortam Değişkenleri`).
+- **Manual**: download the "Windows Executable" zip from [exiftool.org](https://exiftool.org/),
+  rename the extracted `exiftool(-k).exe` to `exiftool.exe`, and either copy it
+  into a folder already on PATH (e.g. `C:\Windows\`) or add its folder to the
+  system PATH (`Settings › System › Advanced system settings › Environment
+  Variables`).
 
-**3. Projeyi kurun** (PowerShell)
+**3. Install the project** (PowerShell)
 
 ```powershell
 git clone https://github.com/gorkemguler/metascout.git
@@ -172,35 +172,35 @@ python -m venv .venv
 pip install -e .
 ```
 
-> PowerShell betik çalıştırmayı engelliyorsa (`.venv\Scripts\Activate.ps1
-> dosyası çalıştırılamıyor` hatası), yönetici olmadan bir kez şunu çalıştırın:
+> If PowerShell blocks script execution (`.venv\Scripts\Activate.ps1 cannot be
+> loaded`), run this once as your own user (no admin needed):
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
-Klasik `cmd.exe` kullanıyorsanız etkinleştirme komutu: `.venv\Scripts\activate.bat`
+Using plain `cmd.exe` instead? Activate with `.venv\Scripts\activate.bat`.
 
-### Kurulumu doğrulama
+### Verify the install
 
-Hangi platformda olursanız olun, sanal ortam etkinken:
+On any platform, with the virtual environment active:
 
 ```bash
 exiftool -ver
 metascout scan --help
 ```
 
-İkisi de hatasız sürüm/yardım metni basıyorsa kurulum tamam.
+If both print version/help text without errors, you're set.
 
-> **Dikkat:** Yukarıdaki `pip install -e .` komutu `metascout` komutunu yalnızca
-> o an aktif olan `.venv` sanal ortamına kurar. Yeni bir terminal açtığınızda ya
-> da proje klasörünün dışındayken `metascout` çalıştırırsanız `zsh: command not
-> found: metascout` / `'metascout' is not recognized...` hatası alırsınız.
-> Bu bir bozukluk değil, venv'in aktif olmamasından kaynaklanır. Çözüm için aşağıya
-> bakın veya her seferinde `source .venv/bin/activate` çalıştırın.
+> **Note:** `pip install -e .` installs the `metascout` command only into
+> whichever `.venv` was active at the time. Open a new terminal, or run
+> `metascout` from outside the project directory, and you'll get `zsh:
+> command not found: metascout` (or `'metascout' is not recognized...` on
+> Windows). That's not broken, the venv just isn't active. Either activate
+> it each time (`source .venv/bin/activate`) or install it globally below.
 
-### Global kurulum (pipx)
+### Global install (pipx)
 
-Her terminalde venv aktive etmeden, sisteminizin her yerinden `metascout`
-komutunu çalıştırmak isterseniz [pipx](https://pipx.pypa.io/) kullanın:
-paketi kendi izole ortamına kurar ama komutu PATH'e ekler.
+If you'd rather run `metascout` from anywhere without activating a venv every
+time, use [pipx](https://pipx.pypa.io/): it installs the package into its own
+isolated environment but puts the command on your PATH.
 
 ```bash
 # macOS
@@ -216,26 +216,25 @@ python -m pip install --user pipx
 python -m pipx ensurepath
 ```
 
-`pipx ensurepath` çalıştırdıktan sonra **terminali yeniden başlatın** (ya da
-`exec zsh` / `exec bash` çalıştırın), ardından proje klasöründen kurun:
+After `pipx ensurepath`, **restart your terminal** (or run `exec zsh` / `exec
+bash`), then install from the project directory:
 
 ```bash
-pipx install --editable /tam/yol/metascout
+pipx install --editable /full/path/to/metascout
 ```
 
-`--editable` sayesinde `src/metascout/` altında yapılan kod değişiklikleri
-yeniden kurmaya gerek kalmadan otomatik yansır. Kurulumdan sonra `metascout`
-komutu hangi dizinde olursanız olun, venv aktive etmeden çalışır.
+`--editable` means code changes under `src/metascout/` take effect
+immediately, no reinstall needed. After this, `metascout` works from any
+directory without activating a venv.
 
-## Hızlı başlangıç
+## Quick start
 
 ```bash
 metascout scan example.com
 ```
 
-Varsayılan olarak site taraması (`crawl`) ve `sitemap.xml` kullanılır, API
-anahtarı gerekmez. Sonuçlar `./metascout_output/report.html` ve `report.json`
-dosyalarına yazılır.
+By default this uses site crawling (`crawl`) and `sitemap.xml`, no API key
+needed. Results are written to `./metascout_output/report.html` and `report.json`.
 
 ```bash
 metascout scan example.com \
@@ -245,22 +244,22 @@ metascout scan example.com \
   --output-dir ./out
 ```
 
-## Çoklu hedef taraması
+## Scanning multiple targets
 
-Bir kuruma ait birden fazla domaini tek seferde tarayıp **tek bir raporda**
-birleştirebilirsiniz. Arka arkaya çalıştırıp raporları elle birleştirmenize
-gerek kalmaz:
+Scan several domains belonging to the same organization in one run and get a
+**single merged report**, no need to run the tool repeatedly and stitch
+reports together yourself:
 
 ```bash
 metascout scan example.com example.org another-example.net
 ```
 
-Domain sayısı fazlaysa bir dosyaya yazıp `--targets-file` ile de verebilirsiniz
-(satır başına bir domain, `#` ile başlayan satırlar yok sayılır):
+For a longer list, put them in a file and use `--targets-file` (one domain
+per line, `#` starts a comment):
 
 ```bash
 cat > domains.txt <<EOF
-# Acme Corp domainleri
+# Acme Corp domains
 example.com
 example.org
 another-example.net
@@ -269,220 +268,218 @@ EOF
 metascout scan --targets-file domains.txt --subdomains
 ```
 
-Üretilen `report.html`/`report.json` içinde, birden fazla hedef verildiğinde
-her domain için ayrı ayrı kaç belge bulunduğunu gösteren bir **"Targets"**
-tablosu da yer alır.
+When more than one target is given, the generated `report.html`/`report.json`
+includes a **"Targets"** table breaking down how many documents were found per
+domain.
 
-## Web arayüzü
+## Web UI
 
-Terminale komut yazmak yerine tarayıcıdan form doldurarak taramak isterseniz:
+If you'd rather fill out a browser form than type CLI flags:
 
 ```bash
 metascout web
 ```
 
-Bu, `http://127.0.0.1:8765/` adresinde yerel bir arayüz açar (tarayıcınızda
-otomatik açılır). Hedefleri (birden fazla, her satıra bir tane), dosya
-uzantılarını, keşif motorlarını ve subdomain seçeneğini forma girip "Taramayı
-başlat"a basmanız yeterli. Tarama bitince sonuç raporu doğrudan tarayıcıda
-açılır; ayrıca `--output-dir` altına (varsayılan `./metascout_output/web-<tarih>/`)
-`report.html`/`report.json` olarak da kaydedilir.
+This opens a local UI at `http://127.0.0.1:8765/` (launches in your browser
+automatically). Enter your targets (one per line), file extensions, discovery
+engines, the subdomain toggle, and the report language (English or Turkish),
+then hit "Taramayı başlat" (Start scan). When the scan finishes, the report
+opens right in the browser; it's also saved under `--output-dir` (default
+`./metascout_output/web-<timestamp>/`) as `report.html`/`report.json`.
 
 ```bash
-metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output
+metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output
 ```
 
-Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir).
-İnternete açık bırakmayın. `google`/`serper`/`brave` motorlarını forma işaretlemek
-için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
-olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
+The UI only listens on `127.0.0.1` (change with `--host`). Don't expose it to
+the internet. To use the `google`/`serper`/`brave` checkboxes, the matching API
+keys need to be set via environment variable or `.env` (see [Search engine API
+keys](#search-engine-api-keys-optional)).
 
-## Subdomain taraması
+## Subdomain enumeration
 
-`--subdomains` ile [crt.sh](https://crt.sh) (Certificate Transparency log arama,
-API anahtarı gerekmez) üzerinden pasif subdomain keşfi yapılır; bulunan her
-subdomain de aynı belge-keşif motorlarıyla (crawl/sitemap/google/serper/brave) taranır:
+`--subdomains` performs passive subdomain discovery via [crt.sh](https://crt.sh)
+(Certificate Transparency log search, no API key required); every discovered
+subdomain is scanned with the same document-discovery engines (crawl/sitemap/google/serper/brave):
 
 ```bash
 metascout scan example.com --subdomains --max-subdomains 30
 ```
 
-`crt.sh` bazen yavaş veya rate-limit'li yanıt verebilir; bu durumda tarama
-sessizce boş subdomain listesiyle devam eder, ana domain taraması etkilenmez.
+`crt.sh` can be slow or rate-limited at times. In that case the scan silently
+continues with an empty subdomain list; the scan of the main domain is unaffected.
 
-## Arama motoru API anahtarları (opsiyonel)
+## Search engine API keys (optional)
 
-`google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
-dork aramaları yapar; bunlar için API anahtarı gerekir:
+The `google`, `serper`, and `brave` engines run classic FOCA-style
+`site:target filetype:pdf` dork searches; each needs an API key:
 
 ```bash
 cp .env.example .env
-# .env dosyasına GOOGLE_API_KEY, GOOGLE_CSE_ID ve/veya BRAVE_API_KEY girin
+# fill in GOOGLE_API_KEY, GOOGLE_CSE_ID and/or BRAVE_API_KEY
 ```
 
-Anahtarları girdiğinizde `google`/`serper`/`brave` motorları **ayrıca bir şey yapmanıza
-gerek kalmadan** otomatik devreye girer (CLI'de varsayılan `--engines`
-listesine eklenir, web arayüzünde ilgili kutucuk otomatik işaretlenir).
-`--engines` ile elle motor seçerseniz bu otomatik davranış geçersiz olur, o
-zaman istediğiniz motorları kendiniz listelemeniz gerekir.
+Once a key is set, the matching `google`/`serper`/`brave` engine turns on **automatically**,
+no extra step needed (added to the CLI's default `--engines` list, and its
+checkbox is pre-checked in the web UI). Passing `--engines` explicitly
+overrides this auto behavior, so you'd list the engines you want yourself.
 
-> **Güvenlik notu:** `.env` zaten [.gitignore](.gitignore)'da, yani bu repo
-> klasöründe tutsanız bile normal `git add .` ile commit'e girmez. Yine de en
-> güvenli yöntem, gerçek anahtarlarınızı **git deposunun dışındaki ayrı bir
-> klasörde** tutmaktır, örn. `~/metascout-calisma/.env`. `metascout`'u
-> [pipx ile global kurarsanız](#global-kurulum-pipx), `metascout scan` komutu
-> hangi klasörden çalıştırılırsa o klasördeki `.env`'i okur; böylece kaynak kod
-> deposuna hiç dokunmadan taramalarınızı çalıştırabilirsiniz.
+> **Security note:** `.env` is already in [.gitignore](.gitignore), so even if
+> you keep it in this repo folder, `git add .` won't pick it up. Still, the
+> safest setup is to keep your real keys in a **separate folder outside the
+> git repository entirely**, e.g. `~/metascout-workspace/.env`. If you
+> [install metascout globally with pipx](#global-install-pipx), `metascout
+> scan` reads the `.env` from whatever directory you run it in, so you can run
+> scans without ever touching the source repo.
 
-- **Google**: [Programmable Search Engine](https://programmablesearchengine.google.com/)
-  üzerinden bir arama motoru oluşturun (tüm web'i arayacak şekilde ayarlayın) ve
-  [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview)
-  için bir API anahtarı alın. Ücretsiz kota günde 100 sorgu.
+- **Google**: create a search engine at [Programmable Search Engine](https://programmablesearchengine.google.com/)
+  (configure it to search the entire web) and get an API key for the
+  [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview).
+  Free tier: 100 queries/day.
 
-  Kota yetmiyorsa `GOOGLE_API_KEY`'e **virgülle ayırarak birden fazla anahtar**
-  girebilirsiniz (farklı Google Cloud projelerinden, aynı `GOOGLE_CSE_ID`'yi
-  paylaşan anahtarlar): `GOOGLE_API_KEY=anahtar1,anahtar2,anahtar3`. Bir
-  anahtarın kotası biterse tarama otomatik olarak bir sonrakine geçer.
+  If that's not enough, set `GOOGLE_API_KEY` to a **comma-separated list of
+  keys** (e.g. from separate Google Cloud projects that share the same
+  `GOOGLE_CSE_ID`): `GOOGLE_API_KEY=key1,key2,key3`. When one key's quota
+  runs out, the scan automatically rotates to the next one.
 
-  > ⚠️ **Google bu API'yi 1 Ocak 2027'de tamamen kapatıyor** ve şu anda **yeni
-  > oluşturulan Google Cloud projelerini zaten reddediyor** — konsolda API
-  > "etkin" görünse bile `403 PERMISSION_DENIED` hatası alıyorsanız (yeni bir
-  > proje/anahtarsa) bu sizin ayarınızdan değil, Google'ın yeni müşteri
-  > kısıtlamasından kaynaklanıyor, düzeltilecek bir şey yok. Aşağıdaki
-  > **Serper**'a geçin.
-- **Serper**: [serper.dev](https://serper.dev) üzerinden ücretsiz bir hesap açın
-  ve API anahtarınızı alın. Google'ın kendi API'si gibi resmi bir Google ürünü
-  değil, ama **gerçek Google arama sonuçlarını** JSON olarak döndüren üçüncü
-  taraf bir servis — Google API'sinin yerini almak için önerilen yol budur.
-  Kayıt olunca ücretsiz kredi tanımlanıyor; güncel miktarı ve fiyatlandırmayı
-  [serper.dev](https://serper.dev) üzerinden kontrol edin, zamanla değişebilir.
-- **Brave**: [brave.com/search/api](https://brave.com/search/api/) üzerinden bir
-  abonelik (ücretsiz "Data for AI" katmanı dahil) oluşturup `X-Subscription-Token`
-  anahtarınızı alın.
+  > ⚠️ **Google is shutting this API down entirely on 2027-01-01**, and it
+  > already rejects newly created Google Cloud projects — if you're getting
+  > `403 PERMISSION_DENIED` on a new project/key even though the console
+  > shows the API as "enabled," that's Google blocking new customers, not a
+  > misconfiguration on your end. There's nothing to fix; use **Serper**
+  > below instead.
+- **Serper**: sign up for free at [serper.dev](https://serper.dev) and grab
+  your API key. Not an official Google product like the API above — it's a
+  third-party service that returns **real Google search results** as JSON,
+  and is the recommended replacement now that Google's own API is being
+  discontinued. Free credit is included on signup; check
+  [serper.dev](https://serper.dev) for the current amount and pricing, since
+  it can change.
+- **Brave**: sign up at [brave.com/search/api](https://brave.com/search/api/)
+  (a free "Data for AI" tier is available) and get your `X-Subscription-Token`.
 
 ```bash
 metascout scan example.com --engines crawl,sitemap,google,serper,brave
 ```
 
-## Tüm CLI seçenekleri
+## Full CLI reference
 
 ```bash
 metascout scan --help
 metascout web --help
 ```
 
-`metascout scan` bir veya daha fazla `TARGET` pozisyonel argümanı alır
-(`metascout scan a.com b.com`); alternatif olarak `--targets-file`:
+`metascout scan` takes one or more `TARGET` positional arguments
+(`metascout scan a.com b.com`), or use `--targets-file` instead:
 
-| Seçenek | Varsayılan | Açıklama |
+| Option | Default | Description |
 |---|---|---|
-| `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
-| `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,google,serper,brave` arasından virgülle liste |
-| `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
-| `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
-| `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |
-| `--max-crawl-pages` | `200` | Crawler'ın host başına gezeceği azami sayfa sayısı |
-| `--max-crawl-depth` | `3` | Crawler'ın azami link derinliği |
-| `--concurrency` | `8` | Eşzamanlı indirme sayısı |
-| `--timeout` | `15` | İstek başına saniye cinsinden zaman aşımı |
-| `--max-download-mb` | `50` | Belge başına azami indirme boyutu (MB) |
-| `--output-dir` | `./metascout_output` | Çıktı klasörü |
-| `--ignore-robots` | kapalı | `robots.txt`'i yok say (yalnızca açık izniniz varsa) |
-| `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
-| `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
-| `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
+| `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
+| `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,google,serper,brave` |
+| `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
+| `--max-subdomains` | `20` | Maximum subdomains to scan |
+| `--max-docs` | `50` | Maximum documents to download and analyze |
+| `--max-crawl-pages` | `200` | Max pages the crawler visits per host |
+| `--max-crawl-depth` | `3` | Max link depth for the crawler |
+| `--concurrency` | `8` | Concurrent downloads |
+| `--timeout` | `15` | Per-request timeout in seconds |
+| `--max-download-mb` | `50` | Max download size per document (MB) |
+| `--output-dir` | `./metascout_output` | Output directory |
+| `--ignore-robots` | off | Ignore `robots.txt` (only with explicit authorization) |
+| `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Can also be set via env var or `.env` |
+| `--json-report` / `--no-json-report` | on | Produce a JSON report |
+| `--html-report` / `--no-html-report` | on | Produce an HTML report |
+| `--report-lang` | `en` | HTML report language: `en` or `tr` |
 
-`metascout web` seçenekleri:
+`metascout web` options:
 
-| Seçenek | Varsayılan | Açıklama |
+| Option | Default | Description |
 |---|---|---|
-| `--host` | `127.0.0.1` | Yalnızca yerel, internete açmayın |
-| `--port` | `8765` | Dinlenecek port |
-| `--output-dir` | `./metascout_output` | Taramaların kaydedileceği klasör |
-| `--open-browser` / `--no-open-browser` | açık | Başlarken tarayıcıyı otomatik aç |
+| `--host` | `127.0.0.1` | Local only, don't expose to the internet |
+| `--port` | `8765` | Port to listen on |
+| `--output-dir` | `./metascout_output` | Where scan runs get saved |
+| `--open-browser` / `--no-open-browser` | on | Auto-open the browser on startup |
 
-## Çıktı yapısı
+## Output layout
 
 ```
 metascout_output/
-├── downloads/               indirilen ham belgeler (metascout scan)
-├── report.html              görsel özet rapor (metascout scan)
-├── report.json              otomasyon/entegrasyon için ham bulgular (metascout scan)
-└── web-20260101-120000/     her metascout web taraması kendi zaman damgalı klasörüne yazılır
+├── downloads/               raw downloaded documents (metascout scan)
+├── report.html              visual summary report (metascout scan)
+├── report.json              raw findings for automation/integration (metascout scan)
+└── web-20260101-120000/     each metascout web run gets its own timestamped folder
     ├── downloads/
     ├── report.html
     └── report.json
 ```
 
-## Mimari
+## Architecture
 
 ```
 src/metascout/
 ├── discovery/
-│   ├── crawler.py         doğrudan site taraması (robots.txt uyumlu)
-│   ├── sitemap.py         sitemap.xml / sitemap index ayrıştırma
-│   ├── search_engines.py  Google/Serper/Brave dork araması
-│   └── subdomains.py      crt.sh üzerinden pasif subdomain keşfi
-├── downloader.py           eşzamanlı indirme, boyut sınırı, sha256
+│   ├── crawler.py         direct site crawling (robots.txt aware)
+│   ├── sitemap.py         sitemap.xml / sitemap index parsing
+│   ├── search_engines.py  Google/Serper/Brave dork search
+│   └── subdomains.py      passive subdomain discovery via crt.sh
+├── downloader.py           concurrent downloads, size cap, sha256
 ├── metadata/
-│   ├── exiftool_wrapper.py exiftool subprocess sarmalayıcısı
-│   └── analyzer.py         regex + alan bazlı bulgu çıkarımı + hedef bazlı sayım
+│   ├── exiftool_wrapper.py exiftool subprocess wrapper
+│   └── analyzer.py         regex + field-based extraction, per-target counts
 ├── report/
-│   ├── html_report.py      Jinja2 tabanlı HTML rapor
-│   └── json_report.py      JSON rapor
-├── pipeline.py              discover → download → extract → analyze akışı (CLI ve web'in ortak motoru)
-├── cli.py                   click tabanlı `metascout scan` / `metascout web` komutları
-└── web.py                   Flask tabanlı yerel web arayüzü
+│   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
+│   └── json_report.py      JSON report
+├── pipeline.py              discover → download → extract → analyze flow (shared by CLI and web)
+├── cli.py                   click-based `metascout scan` / `metascout web` commands
+└── web.py                   Flask-based local web UI
 ```
 
-## Test
+## Testing
 
 ```bash
 pip install -e . pytest
 pytest
 ```
 
-## Sorun giderme
+## Troubleshooting
 
-**`zsh: command not found: metascout`** (veya PowerShell'de `'metascout' is not recognized...`)
-`metascout` komutu, kurulumu yaptığınız `.venv` sanal ortamına özeldir; sanal
-ortam aktif değilken herhangi bir terminalden çağrılamaz. İki çözüm:
-1. Proje klasörüne gidip venv'i aktive edin: `cd /proje/yolu && source .venv/bin/activate` (Windows: `.venv\Scripts\Activate.ps1`)
-2. Ya da [pipx ile global kurulum](#global-kurulum-pipx) yaparak komutu her yerden kullanılabilir hale getirin.
+**`zsh: command not found: metascout`** (or `'metascout' is not recognized...` on PowerShell)
+`metascout` only exists inside the `.venv` you installed it into. It's not
+callable from any random terminal unless that venv is active. Two fixes:
+1. `cd` into the project and activate the venv: `cd /path/to/metascout && source .venv/bin/activate` (Windows: `.venv\Scripts\Activate.ps1`)
+2. Or do a [global install with pipx](#global-install-pipx) to make the command available everywhere.
 
 **`exiftool not found on PATH`**
-ExifTool kurulu değil ya da PATH'te değil. [Kurulum](#kurulum) bölümündeki
-platformunuza uygun adımı izleyin, ardından `exiftool -ver` ile doğrulayın.
+ExifTool isn't installed or isn't on PATH. Follow the step for your platform
+under [Installation](#installation), then verify with `exiftool -ver`.
 
-**Windows'ta `exiftool(-k).exe` çalışıyor ama `exiftool` çalışmıyor**
-İndirdiğiniz zip'teki dosya adı `exiftool(-k).exe`. Bunu `exiftool.exe` olarak
-yeniden adlandırmanız ve PATH'te bir klasöre koymanız gerekiyor (yukarıdaki
-Windows kurulum adımlarına bakın).
+**On Windows, `exiftool(-k).exe` works but `exiftool` doesn't**
+The file in the zip is named `exiftool(-k).exe`. Rename it to `exiftool.exe`
+and place it in a folder on PATH (see the Windows install steps above).
 
 **`No documents discovered`**
-Hedefte seçtiğiniz uzantılarda (varsayılan: `pdf,doc,docx,...`) herkese açık
-belge yok, ya da `robots.txt` crawler'ı engelliyor olabilir. `--engines
-crawl,sitemap,google,serper,brave` ile daha geniş kapsam deneyin ya da (yalnızca
-yetkiniz varsa) `--ignore-robots` kullanın.
+The target has no publicly linked documents matching your extensions
+(default: `pdf,doc,docx,...`), or `robots.txt` is blocking the crawler. Try a
+wider net with `--engines crawl,sitemap,google,serper,brave`, or (only if you're
+authorized) `--ignore-robots`.
 
-**crt.sh yanıt vermiyor / yavaş**
-Servis zaman zaman rate-limit uygular; tarama sessizce boş subdomain listesiyle
-devam eder. Birkaç dakika sonra tekrar deneyin.
+**crt.sh is unresponsive / slow**
+The service rate-limits occasionally; the scan silently continues with an
+empty subdomain list. Try again in a few minutes.
 
-**`Google`/`Serper`/`Brave` motoru "skipped" uyarısı veriyor**
-İlgili API anahtarı/CSE id tanımlı değil. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
-bölümüne bakın.
+**`Google`/`Serper`/`Brave` engine prints a "skipped" warning**
+The corresponding API key/CSE id isn't set. See [Search engine API keys](#search-engine-api-keys-optional).
 
-## Etik kullanım
+## Responsible use
 
-Bu araç yalnızca **kendi sisteminiz** veya **yazılı izniniz olan** hedefler için
-tasarlanmıştır. Varsayılan olarak `robots.txt` kurallarına uyar ve isteklerinde
-kendini gizlemeyen dürüst bir User-Agent (`MetaScout/0.1`) gönderir. Yani hedef
-site operatörü recon trafiğini loglarında görüp isterse engelleyebilir.
-İzniniz olmayan sistemlere karşı kullanmak yasa dışı olabilir; sorumluluk
-tamamen kullanıcıya aittir.
+This tool is built for **your own systems** or targets you have **written
+authorization** to test. It respects `robots.txt` by default and sends an
+honest, non-spoofed User-Agent (`MetaScout/0.1`), so a target's operators can
+see recon traffic in their logs and block it if they want to. Using it against
+systems you're not authorized to test may be illegal; that responsibility is
+entirely on the user.
 
-## Lisans
+## License
 
 [MIT](LICENSE) © 2026 Görkem Güler

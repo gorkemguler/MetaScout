@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MetaScout Report — {{ findings.targets | join(", ") }}</title>
+<style>
+  :root {
+    --bg: #0b0d13; --panel: #12141d; --panel2: #161925; --border: #262b3d; --border-soft: #1c2030;
+    --text: #e8eaf2; --muted: #8b93a7; --muted2: #6b7185;
+    --accent: #6ea8fe; --accent2: #8b7dfb; --good: #4ade80; --warn: #f2a65a; --bad: #f26d6d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 40px; }
+
+  header {
+    background: linear-gradient(180deg, #12141f 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border); padding: 36px 0 28px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .brand .name { font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+  .brand .tagline { color: var(--muted2); font-size: 12.5px; margin-top: 1px; }
+  .brand svg { flex-shrink: 0; }
+
+  h1 { margin: 0 0 14px; font-size: 25px; font-weight: 800; letter-spacing: -.01em; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center; }
+  .meta-item { font-size: 13px; color: var(--muted); }
+  .meta-item strong { color: var(--text); font-weight: 600; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+    padding: 5px 12px; border-radius: 999px; letter-spacing: .02em; text-transform: uppercase;
+  }
+  .badge-none { background: rgba(74,222,128,0.12); color: var(--good); border: 1px solid rgba(74,222,128,0.3); }
+  .badge-low { background: rgba(110,168,254,0.12); color: var(--accent); border: 1px solid rgba(110,168,254,0.3); }
+  .badge-medium { background: rgba(242,166,90,0.14); color: var(--warn); border: 1px solid rgba(242,166,90,0.35); }
+  .badge-high { background: rgba(242,109,109,0.14); color: var(--bad); border: 1px solid rgba(242,109,109,0.35); }
+
+  main { padding: 32px 0 60px; }
+
+  .summary { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 28px; max-width: 820px; }
+  .summary strong { color: var(--text); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 40px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 18px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .card .icon svg { width: 16px; height: 16px; }
+  .card .num { font-size: 28px; font-weight: 800; letter-spacing: -.01em; line-height: 1; }
+  .card .label { color: var(--muted); font-size: 12px; font-weight: 500; }
+  .ic-a { background: rgba(110,168,254,0.14); color: var(--accent); }
+  .ic-b { background: rgba(139,125,251,0.16); color: var(--accent2); }
+  .ic-c { background: rgba(242,109,109,0.14); color: var(--bad); }
+  .ic-d { background: rgba(242,166,90,0.14); color: var(--warn); }
+  .ic-e { background: rgba(74,222,128,0.14); color: var(--good); }
+  .ic-f { background: rgba(139,147,167,0.14); color: var(--muted); }
+
+  section { margin-bottom: 34px; }
+  .section-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .section-head .icon { width: 22px; height: 22px; color: var(--muted); flex-shrink: 0; }
+  .section-head .icon svg { width: 16px; height: 16px; }
+  .section-head h2 { margin: 0; font-size: 15px; font-weight: 700; flex: 1; }
+  .section-head .n { font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { color: var(--muted2); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody tr:last-child td { border-bottom: none; }
+  .value { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; word-break: break-word; }
+  .count { color: var(--accent); font-weight: 700; }
+  .doclist { color: var(--muted); font-size: 12px; }
+  .doclist a { color: var(--muted); }
+  .empty { color: var(--muted2); font-style: italic; padding: 16px 0; font-size: 13px; }
+  .status-ok { color: var(--good); font-weight: 600; }
+  .status-err { color: var(--bad); }
+  .filetype-badge {
+    display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
+    font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .table-scroll { overflow-x: auto; border-radius: 10px; }
+
+  footer { border-top: 1px solid var(--border); padding: 22px 0 36px; }
+  footer .foot-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--muted2); font-size: 11.5px; }
+
+  @media print {
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="34" height="34" rx="8" fill="#161925"/>
+        <rect x="9" y="8" width="13" height="17" rx="2" stroke="url(#g)" stroke-width="1.6"/>
+        <line x1="12" y1="13" x2="18" y2="13" stroke="#6ea8fe" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="12" y1="16.5" x2="18" y2="16.5" stroke="#6ea8fe" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="21" cy="21" r="4" fill="#0b0d13" stroke="url(#g)" stroke-width="1.6"/>
+        <line x1="24" y1="24" x2="27" y2="27" stroke="url(#g)" stroke-width="1.8" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="g" x1="9" y1="8" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#6ea8fe"/><stop offset="1" stop-color="#8b7dfb"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div>
+        <div class="name">MetaScout</div>
+        <div class="tagline">Document Discovery &amp; Metadata Leak Analysis</div>
+      </div>
+    </div>
+
+    <h1>Metadata Leak Report</h1>
+    <div class="meta-row">
+      <span class="meta-item">Target{{ "s" if findings.targets | length > 1 else "" }}: <strong>{{ findings.targets | join(", ") }}</strong></span>
+      <span class="meta-item">Scanned: <strong>{{ findings.scanned_at.strftime("%Y-%m-%d %H:%M") }} UTC</strong></span>
+      <span class="meta-item">Documents scanned: <strong>{{ findings.documents | length }}</strong></span>
+      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length %}
+      {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length %}
+      {% if total_findings == 0 %}
+        <span class="badge badge-none">No Findings</span>
+      {% elif sensitive_hits == 0 %}
+        <span class="badge badge-low">Low Risk</span>
+      {% elif sensitive_hits <= 10 %}
+        <span class="badge badge-medium">Medium Risk</span>
+      {% else %}
+        <span class="badge badge-high">High Risk</span>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <p class="summary">
+      {% if findings.documents | length == 0 %}
+        No scannable documents were found on the target{{ "s" if findings.targets | length > 1 else "" }}; metadata analysis could not be performed.
+      {% else %}
+        <strong>{{ findings.documents | length }}</strong> document(s) discovered,
+        metadata was extracted from <strong>{{ findings.documents_with_metadata }}</strong>,
+        for a total of <strong>{{ total_findings }}</strong> unique finding(s).
+        {% if sensitive_hits > 0 %}
+          Among these are <strong>{{ findings.usernames|length }} username(s)</strong>,
+          <strong>{{ findings.emails|length }} email(s)</strong>,
+          <strong>{{ findings.internal_paths|length }} internal file path(s)</strong>, and
+          <strong>{{ findings.servers_and_printers|length }} server/printer</strong> record(s) — the
+          kind of data that can count as a direct information leak.
+        {% else %}
+          No direct username/email/server leaks were detected; findings are mostly
+          software and operating system information.
+        {% endif %}
+      {% endif %}
+    </p>
+
+    <div class="cards">
+      <div class="card"><div class="icon ic-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c0-4.2 3.4-6.5 7.5-6.5s7.5 2.3 7.5 6.5"/></svg></div><div class="num">{{ findings.usernames | length }}</div><div class="label">Usernames</div></div>
+      <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg></div><div class="num">{{ findings.emails | length }}</div><div class="label">Emails</div></div>
+      <div class="card"><div class="icon ic-b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M9.5 4v16"/></svg></div><div class="num">{{ findings.software | length }}</div><div class="label">Software / versions</div></div>
+      <div class="card"><div class="icon ic-f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/></svg></div><div class="num">{{ findings.operating_systems | length }}</div><div class="label">Operating systems</div></div>
+      <div class="card"><div class="icon ic-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V8z"/></svg></div><div class="num">{{ findings.internal_paths | length }}</div><div class="label">Internal paths</div></div>
+      <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6.5" rx="1.5"/><rect x="3" y="13.5" width="18" height="6.5" rx="1.5"/><circle cx="7" cy="7.25" r="0.9" fill="currentColor" stroke="none"/><circle cx="7" cy="16.75" r="0.9" fill="currentColor" stroke="none"/></svg></div><div class="num">{{ findings.servers_and_printers | length }}</div><div class="label">Servers / printers</div></div>
+      <div class="card"><div class="icon ic-e"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div><div class="num">{{ findings.documents | length }}</div><div class="label">Documents found</div></div>
+      <div class="card"><div class="icon ic-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><div class="num">{{ findings.documents_with_metadata }}</div><div class="label">With metadata</div></div>
+    </div>
+
+    {% if findings.targets | length > 1 %}
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg></div>
+        <h2>Targets</h2>
+        <span class="n">{{ findings.targets | length }}</span>
+      </div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Target</th><th>Documents found</th></tr></thead>
+        <tbody>
+        {% for t, count in findings.documents_by_target.items() %}
+          <tr><td class="value">{{ t }}</td><td class="count">{{ count }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {% macro finding_table(bucket, value_label) %}
+    {% if bucket %}
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>{{ value_label }}</th><th>Docs</th><th>Found in</th></tr></thead>
+      <tbody>
+      {% for value, f in bucket.items() | sort %}
+        <tr>
+          <td class="value">{{ value }}</td>
+          <td class="count">{{ f.document_urls | length }}</td>
+          <td class="doclist">
+            {% for u in f.document_urls[:3] %}<a href="{{ u }}" target="_blank" rel="noopener">{{ u | truncate(50) }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+            {% if f.document_urls | length > 3 %}<span> +{{ f.document_urls | length - 3 }} more</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      <div class="empty">No findings in this category.</div>
+    {% endif %}
+    {% endmacro %}
+
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c0-4.2 3.4-6.5 7.5-6.5s7.5 2.3 7.5 6.5"/></svg></div>
+        <h2>Usernames</h2>
+        <span class="n">{{ findings.usernames | length }}</span>
+      </div>
+      {{ finding_table(findings.usernames, "Username") }}
+    </section>
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg></div>
+        <h2>Emails</h2>
+        <span class="n">{{ findings.emails | length }}</span>
+      </div>
+      {{ finding_table(findings.emails, "Email") }}
+    </section>
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M9.5 4v16"/></svg></div>
+        <h2>Software &amp; Versions</h2>
+        <span class="n">{{ findings.software | length }}</span>
+      </div>
+      {{ finding_table(findings.software, "Software") }}
+    </section>
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/></svg></div>
+        <h2>Operating Systems</h2>
+        <span class="n">{{ findings.operating_systems | length }}</span>
+      </div>
+      {{ finding_table(findings.operating_systems, "OS") }}
+    </section>
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V8z"/></svg></div>
+        <h2>Internal File Paths</h2>
+        <span class="n">{{ findings.internal_paths | length }}</span>
+      </div>
+      {{ finding_table(findings.internal_paths, "Path") }}
+    </section>
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6.5" rx="1.5"/><rect x="3" y="13.5" width="18" height="6.5" rx="1.5"/><circle cx="7" cy="7.25" r="0.9" fill="currentColor" stroke="none"/><circle cx="7" cy="16.75" r="0.9" fill="currentColor" stroke="none"/></svg></div>
+        <h2>Servers &amp; Printers</h2>
+        <span class="n">{{ findings.servers_and_printers | length }}</span>
+      </div>
+      {{ finding_table(findings.servers_and_printers, "Server / printer") }}
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
+        <h2>Documents</h2>
+        <span class="n">{{ findings.documents | length }}</span>
+      </div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>URL</th><th>Type</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for d in findings.documents %}
+          <tr>
+            <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a></td>
+            <td><span class="filetype-badge">{{ d.filetype }}</span></td>
+            <td>
+              {% if d.error %}<span class="status-err">error: {{ d.error }}</span>
+              {% else %}<span class="status-ok">ok</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-row">
+      <span>Generated by MetaScout &middot; for authorized security assessments only</span>
+      <span>{{ findings.scanned_at.strftime("%Y-%m-%d %H:%M") }} UTC</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

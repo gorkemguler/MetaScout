@@ -98,6 +98,12 @@ _FORM_BODY = """
 
   <label><input type="checkbox" name="subdomains"> Subdomain keşfi (crt.sh)</label>
 
+  <label>Rapor dili / Report language</label>
+  <div class="checks">
+    <label><input type="radio" name="report_lang" value="en" checked> English</label>
+    <label><input type="radio" name="report_lang" value="tr"> Türkçe</label>
+  </div>
+
   <div class="row">
     <div>
       <label for="max_docs">Azami belge sayısı</label>
@@ -164,6 +170,9 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
         engines = request.form.getlist("engines") or ["crawl", "sitemap"]
         subdomains = request.form.get("subdomains") == "on"
+        report_lang = request.form.get("report_lang", "en")
+        if report_lang not in ("en", "tr"):
+            report_lang = "en"
         try:
             max_docs = max(1, int(request.form.get("max_docs") or 30))
             max_crawl_pages = max(1, int(request.form.get("max_crawl_pages") or 100))
@@ -195,7 +204,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             return _render_form(error=str(exc), targets_value=raw_targets, filetypes_value=filetypes_value), 500
 
         os.makedirs(run_dir, exist_ok=True)
-        html = render_html_report(findings)
+        html = render_html_report(findings, lang=report_lang)
         with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
             fh.write(html)
         with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
