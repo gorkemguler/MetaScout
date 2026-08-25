@@ -36,6 +36,7 @@
 - [Quick start](#quick-start)
 - [Scanning multiple targets](#scanning-multiple-targets)
 - [Web UI](#web-ui)
+- [Wayback Machine discovery](#wayback-machine-discovery)
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
@@ -66,8 +67,9 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 
 ## Features
 
-- **Three document discovery methods**: direct site crawling, `sitemap.xml`/`robots.txt`
-  parsing, and optional search engine dorking (Google/Serper/Brave `site: filetype:`)
+- **Multiple document discovery methods**: direct site crawling, `sitemap.xml`/`robots.txt`
+  parsing, the Wayback Machine's archive (finds files no longer live on the
+  site), and optional search engine dorking (Google/Serper/Brave `site: filetype:`)
 - **Multi-target scanning**: scan dozens of domains belonging to one organization
   in a single run and get one merged report
 - **CLI and local web UI**: `metascout scan` from the terminal, or `metascout
@@ -300,6 +302,24 @@ the internet. To use the `google`/`serper`/`brave` checkboxes, the matching API
 keys need to be set via environment variable or `.env` (see [Search engine API
 keys](#search-engine-api-keys-optional)).
 
+## Wayback Machine discovery
+
+The `wayback` engine (on by default, no API key needed) queries the [Wayback
+Machine](https://web.archive.org)'s CDX Server API for every document
+archive.org has ever captured under a target host — including files that
+were later removed, unlinked, or made unreachable on the live site. This
+often surfaces old reports, drafts, or internal documents that crawling the
+current site would never find.
+
+```bash
+metascout scan example.com --engines wayback
+```
+
+It's scoped to exactly the host you pass (no automatic subdomain expansion —
+use `--subdomains` for that, same as the other engines). If `web.archive.org`
+is unreachable from your network (some ISPs block it), the engine just
+returns no results for that host; the rest of the scan is unaffected.
+
 ## Subdomain enumeration
 
 `--subdomains` performs passive subdomain discovery via [crt.sh](https://crt.sh)
@@ -363,7 +383,7 @@ overrides this auto behavior, so you'd list the engines you want yourself.
   (a free "Data for AI" tier is available) and get your `X-Subscription-Token`.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,google,serper,brave
+metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave
 ```
 
 ## Full CLI reference
@@ -380,7 +400,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,google,serper,brave` |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,google,serper,brave` |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
 | `--max-subdomains` | `20` | Maximum subdomains to scan |
 | `--max-docs` | `50` | Maximum documents to download and analyze |
@@ -425,6 +445,7 @@ src/metascout/
 ├── discovery/
 │   ├── crawler.py         direct site crawling (robots.txt aware)
 │   ├── sitemap.py         sitemap.xml / sitemap index parsing
+│   ├── wayback.py         Wayback Machine (archive.org) CDX API discovery
 │   ├── search_engines.py  Google/Serper/Brave dork search
 │   └── subdomains.py      passive subdomain discovery via crt.sh
 ├── downloader.py           concurrent downloads, size cap, sha256
@@ -465,7 +486,7 @@ and place it in a folder on PATH (see the Windows install steps above).
 **`No documents discovered`**
 The target has no publicly linked documents matching your extensions
 (default: `pdf,doc,docx,...`), or `robots.txt` is blocking the crawler. Try a
-wider net with `--engines crawl,sitemap,google,serper,brave`, or (only if you're
+wider net with `--engines crawl,sitemap,wayback,google,serper,brave`, or (only if you're
 authorized) `--ignore-robots`.
 
 **crt.sh is unresponsive / slow**

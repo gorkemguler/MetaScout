@@ -60,11 +60,12 @@ def _print_summary(findings) -> None:
 
 
 def _default_engines() -> str:
-    """crawl+sitemap always; auto-add google/serper/brave when their API keys
-    are already configured (env var or .env), so setting up a key is enough
-    to use it without also remembering to pass --engines.
+    """crawl+sitemap+wayback always (all free, no API key needed); auto-add
+    google/serper/brave when their API keys are already configured (env var
+    or .env), so setting up a key is enough to use it without also
+    remembering to pass --engines.
     """
-    engines = ["crawl", "sitemap"]
+    engines = ["crawl", "sitemap", "wayback"]
     if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
         engines.append("google")
     if os.environ.get("SERPER_API_KEY"):
@@ -98,7 +99,7 @@ def main() -> None:
 @click.argument("targets", nargs=-1)
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,google,serper,brave. Defaults to crawl,sitemap plus google/serper/brave automatically if their API keys are set.")
+@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,wayback,google,serper,brave. Defaults to crawl,sitemap,wayback plus google/serper/brave automatically if their API keys are set.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
 @click.option("--max-crawl-depth", default=3, show_default=True)

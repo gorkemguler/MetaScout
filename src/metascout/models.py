@@ -11,6 +11,7 @@ class DiscoverySource(str, Enum):
     BRAVE = "brave"
     CRAWL = "crawl"
     SITEMAP = "sitemap"
+    WAYBACK = "wayback"
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ import os
 from typing import Callable
 
 from .config import ScanConfig
-from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, serper_dork_search, sitemap_search
+from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
@@ -33,6 +33,12 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                 docs = sitemap_search(
                     host, cfg.filetypes,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
+                )
+            elif engine == "wayback":
+                docs = wayback_search(
+                    host, cfg.filetypes,
+                    timeout=cfg.request_timeout, user_agent=cfg.user_agent,
+                    max_results=max(cfg.max_docs, 100),
                 )
             elif engine == "google":
                 # Google's API itself caps at ~100 results/query (start<=91),

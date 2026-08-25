@@ -88,6 +88,7 @@ _FORM_BODY = """
   <div class="checks">
     <label><input type="checkbox" name="engines" value="crawl" checked> crawl</label>
     <label><input type="checkbox" name="engines" value="sitemap" checked> sitemap</label>
+    <label><input type="checkbox" name="engines" value="wayback" checked> wayback</label>
     <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
     <label><input type="checkbox" name="engines" value="serper" {serper_checked}> serper{serper_hint}</label>
     <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
@@ -168,7 +169,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         filetypes_value = request.form.get("filetypes", ",".join(DEFAULT_FILETYPES))
         filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
-        engines = request.form.getlist("engines") or ["crawl", "sitemap"]
+        engines = request.form.getlist("engines") or ["crawl", "sitemap", "wayback"]
         subdomains = request.form.get("subdomains") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):

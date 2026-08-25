@@ -36,6 +36,7 @@
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Çoklu hedef taraması](#çoklu-hedef-taraması)
 - [Web arayüzü](#web-arayüzü)
+- [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Subdomain taraması](#subdomain-taraması)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
@@ -67,8 +68,9 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 
 ## Özellikler
 
-- **Üç belge keşif yöntemi**: doğrudan site taraması (crawl), `sitemap.xml`/`robots.txt`
-  ayrıştırma, ve isteğe bağlı arama motoru dork'ları (Google/Serper/Brave `site: filetype:`)
+- **Birden fazla belge keşif yöntemi**: doğrudan site taraması (crawl), `sitemap.xml`/`robots.txt`
+  ayrıştırma, Wayback Machine arşivi (canlıda artık olmayan dosyaları bile bulur),
+  ve isteğe bağlı arama motoru dork'ları (Google/Serper/Brave `site: filetype:`)
 - **Çoklu hedef taraması**: bir kuruma ait onlarca domaini tek komutta/tek formda
   tarayıp tek bir raporda birleştirir
 - **Hem CLI hem yerel web arayüzü**: `metascout scan` ile terminalden, `metascout
@@ -302,6 +304,25 @@ Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir)
 için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
 olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
 
+## Wayback Machine keşfi
+
+`wayback` motoru (varsayılan olarak açık, API anahtarı gerekmez) [Wayback
+Machine](https://web.archive.org)'in CDX Server API'sini sorgulayarak
+archive.org'un hedef host için şimdiye kadar arşivlediği **tüm** belgeleri
+bulur — sonradan kaldırılmış, linki koparılmış ya da artık erişilemeyen
+dosyalar dahil. Bu, canlı siteyi taramanın asla bulamayacağı eski raporları,
+taslakları veya iç belgeleri ortaya çıkarabilir.
+
+```bash
+metascout scan example.com --engines wayback
+```
+
+Tam olarak verdiğiniz host'a odaklıdır (diğer motorlar gibi otomatik
+subdomain genişletmesi yapmaz — bunun için `--subdomains` kullanın). Eğer
+`web.archive.org` ağınızdan erişilemiyorsa (bazı servis sağlayıcılar
+engelliyor), motor sadece o host için sonuç döndürmez; taramanın geri kalanı
+etkilenmez.
+
 ## Subdomain taraması
 
 `--subdomains` ile [crt.sh](https://crt.sh) (Certificate Transparency log arama,
@@ -366,7 +387,7 @@ zaman istediğiniz motorları kendiniz listelemeniz gerekir.
   anahtarınızı alın.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,google,serper,brave
+metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave
 ```
 
 ## Tüm CLI seçenekleri
@@ -383,7 +404,7 @@ metascout web --help
 |---|---|---|
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,google,serper,brave` arasından virgülle liste |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |
@@ -428,6 +449,7 @@ src/metascout/
 ├── discovery/
 │   ├── crawler.py         doğrudan site taraması (robots.txt uyumlu)
 │   ├── sitemap.py         sitemap.xml / sitemap index ayrıştırma
+│   ├── wayback.py         Wayback Machine (archive.org) CDX API keşfi
 │   ├── search_engines.py  Google/Serper/Brave dork araması
 │   └── subdomains.py      crt.sh üzerinden pasif subdomain keşfi
 ├── downloader.py           eşzamanlı indirme, boyut sınırı, sha256
@@ -469,7 +491,7 @@ Windows kurulum adımlarına bakın).
 **`No documents discovered`**
 Hedefte seçtiğiniz uzantılarda (varsayılan: `pdf,doc,docx,...`) herkese açık
 belge yok, ya da `robots.txt` crawler'ı engelliyor olabilir. `--engines
-crawl,sitemap,google,serper,brave` ile daha geniş kapsam deneyin ya da (yalnızca
+crawl,sitemap,wayback,google,serper,brave` ile daha geniş kapsam deneyin ya da (yalnızca
 yetkiniz varsa) `--ignore-robots` kullanın.
 
 **crt.sh yanıt vermiyor / yavaş**
