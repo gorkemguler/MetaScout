@@ -16,6 +16,10 @@
 
 <p align="center"><sub>🇬🇧 English · <a href="README.tr.md">🇹🇷 Türkçe</a></sub></p>
 
+<p align="center">
+  ⭐ If MetaScout is useful to you, consider starring the repo — it helps others find it too.
+</p>
+
 ---
 
 ## Table of contents

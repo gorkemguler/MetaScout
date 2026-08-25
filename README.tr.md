@@ -16,6 +16,10 @@
 
 <p align="center"><sub><a href="README.md">🇬🇧 English</a> · 🇹🇷 Türkçe</sub></p>
 
+<p align="center">
+  ⭐ MetaScout işine yaradıysa reponuza bir yıldız bırakmayı düşünün — başkalarının da bulmasına yardımcı olur.
+</p>
+
 ---
 
 ## İçindekiler
