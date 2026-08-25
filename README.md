@@ -320,6 +320,13 @@ use `--subdomains` for that, same as the other engines). If `web.archive.org`
 is unreachable from your network (some ISPs block it), the engine just
 returns no results for that host; the rest of the scan is unaffected.
 
+Each result is reported under its original live-site URL — the same URL
+crawl, sitemap, or a dork engine would report for the same file — so a
+document found by more than one engine still shows up once in the report,
+not twice. Since that original URL is often exactly what's gone, MetaScout
+also keeps the actual archive.org snapshot address behind the scenes and
+downloads from there automatically if fetching the original URL fails.
+
 ## Subdomain enumeration
 
 `--subdomains` performs passive subdomain discovery via [crt.sh](https://crt.sh)

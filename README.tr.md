@@ -323,6 +323,14 @@ subdomain genişletmesi yapmaz — bunun için `--subdomains` kullanın). Eğer
 engelliyor), motor sadece o host için sonuç döndürmez; taramanın geri kalanı
 etkilenmez.
 
+Her sonuç, canlı sitedeki **orijinal URL**'i ile raporlanır — crawl,
+sitemap ya da bir dork motorunun aynı dosya için raporlayacağı URL ile
+birebir aynı — böylece birden fazla motorun bulduğu bir belge raporda iki
+kez değil, tek seferde görünür. Orijinal URL genelde tam olarak "artık
+olmayan" şey olduğu için, MetaScout arka planda gerçek archive.org
+anlık görüntü adresini de tutar ve orijinal URL'den indirme başarısız
+olursa otomatik olarak oradan indirir.
+
 ## Subdomain taraması
 
 `--subdomains` ile [crt.sh](https://crt.sh) (Certificate Transparency log arama,

@@ -19,6 +19,11 @@ class DiscoveredDocument:
     url: str
     source: DiscoverySource
     filetype: str
+    # Fallback download location when `url` itself is unreachable (e.g. a
+    # Wayback Machine snapshot for a file removed from the live site).
+    # `url` stays the canonical original — used for cross-engine dedup and
+    # in the report — regardless of which one the bytes actually came from.
+    archive_url: str | None = None
 
 
 @dataclass
