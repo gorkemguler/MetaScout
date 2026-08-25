@@ -43,6 +43,14 @@ _PAGE_HEAD = """<!DOCTYPE html>
   .checks { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
   .checks label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  details.manual-urls { margin-top: 16px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  details.manual-urls[open] { padding-bottom: 16px; }
+  details.manual-urls summary {
+    cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 600;
+    list-style: none; user-select: none;
+  }
+  details.manual-urls summary::-webkit-details-marker { display: none; }
+  details.manual-urls[open] summary { margin-bottom: 4px; }
   button { background: var(--accent); color: #0f1117; border: none; border-radius: 8px; padding: 12px 20px;
     font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 24px; }
   button:hover { opacity: 0.9; }
@@ -83,11 +91,14 @@ _FORM_BODY = """
   <div class="hint">Bir kuruma ait birden fazla domaini aynı anda tarayıp tek raporda birleştirebilirsiniz.
   Aşağıya manuel URL listesi girdiyseniz burayı boş bırakabilirsiniz — hedef otomatik çıkarılır.</div>
 
-  <label for="manual_urls">Manuel URL listesi (opsiyonel, her satıra bir tam belge URL'i)</label>
-  <textarea id="manual_urls" name="manual_urls" placeholder="https://example.com/reports/2023.pdf&#10;https://example.com/files/notes.docx">{manual_urls_value}</textarea>
-  <div class="hint">Bir motor çalışmadıysa ya da elle topladığınız linkleriniz varsa buraya yapıştırın —
-  keşif motorlarını atlayıp bu URL'ler doğrudan indirilip analiz edilir ve rapora eklenir. Keşifle
-  bulunan bir belgeyle aynı URL ise tekrar eklenmez.</div>
+  <details class="manual-urls"{manual_urls_open}>
+    <summary>+ Manuel URL listesi ekle (opsiyonel)</summary>
+    <label for="manual_urls">Her satıra bir tam belge URL'i</label>
+    <textarea id="manual_urls" name="manual_urls" placeholder="https://example.com/reports/2023.pdf&#10;https://example.com/files/notes.docx">{manual_urls_value}</textarea>
+    <div class="hint">Bir motor çalışmadıysa ya da elle topladığınız linkleriniz varsa buraya yapıştırın —
+    keşif motorlarını atlayıp bu URL'ler doğrudan indirilip analiz edilir ve rapora eklenir. Keşifle
+    bulunan bir belgeyle aynı URL ise tekrar eklenmez.</div>
+  </details>
 
   <label for="filetypes">Dosya uzantıları</label>
   <input type="text" id="filetypes" name="filetypes" value="{filetypes_value}">
@@ -156,6 +167,7 @@ def _render_form(
         exiftool_block=exiftool_block,
         targets_value=targets_value,
         manual_urls_value=manual_urls_value,
+        manual_urls_open=" open" if manual_urls_value.strip() else "",
         filetypes_value=filetypes_value or ",".join(DEFAULT_FILETYPES),
         google_checked="checked" if google_ready else "",
         serper_checked="checked" if serper_ready else "",
