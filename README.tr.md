@@ -315,14 +315,16 @@ metascout web
 ```
 
 Bu, `http://127.0.0.1:8765/` adresinde yerel bir arayüz açar (tarayıcınızda
-otomatik açılır). Hedefleri (birden fazla, her satıra bir tane), opsiyonel
-manuel URL listesini (bkz. [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
+otomatik açılır), varsayılan olarak İngilizce — sağ üstteki **TR**'ye
+tıklayarak tüm sayfayı Türkçe'ye çevirebilirsiniz (`EN`/`TR`, doğrudan
+`?lang=tr` ile de erişilebilir). Hedefleri (birden fazla, her satıra bir
+tane), opsiyonel manuel URL listesini (bkz. [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 — hedefleri boş bırakırsanız URL'lerden otomatik çıkarılır), dosya
 uzantılarını, keşif motorlarını, subdomain seçeneğini ve rapor dilini
-(İngilizce/Türkçe) forma girip "Taramayı başlat"a basmanız yeterli. Tarama
-bitince sonuç raporu doğrudan tarayıcıda açılır; ayrıca `--output-dir` altına
-(varsayılan `./metascout_output/web-<tarih>/`) `report.html`/`report.json`
-olarak da kaydedilir.
+(İngilizce/Türkçe, sayfanın kendi dilinden bağımsız) forma girip "Taramayı
+başlat"a basmanız yeterli. Tarama bitince sonuç raporu doğrudan tarayıcıda
+açılır; ayrıca `--output-dir` altına (varsayılan `./metascout_output/web-<tarih>/`)
+`report.html`/`report.json` olarak da kaydedilir.
 
 ```bash
 metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output

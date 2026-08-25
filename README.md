@@ -314,13 +314,16 @@ metascout web
 ```
 
 This opens a local UI at `http://127.0.0.1:8765/` (launches in your browser
-automatically). Enter your targets (one per line), an optional manual URL
-list (see [Scanning a manual URL list](#scanning-a-manual-url-list) — leave
+automatically), in English by default — click **TR** in the top-right corner
+to switch the whole page to Turkish (`EN`/`TR`, also reachable directly via
+`?lang=tr`). Enter your targets (one per line), an optional manual URL list
+(see [Scanning a manual URL list](#scanning-a-manual-url-list) — leave
 targets empty and it'll derive them from the URLs), file extensions,
 discovery engines, the subdomain toggle, and the report language (English or
-Turkish), then hit "Taramayı başlat" (Start scan). When the scan finishes,
-the report opens right in the browser; it's also saved under `--output-dir`
-(default `./metascout_output/web-<timestamp>/`) as `report.html`/`report.json`.
+Turkish, independent of the page's own language), then hit "Start scan".
+When the scan finishes, the report opens right in the browser; it's also
+saved under `--output-dir` (default `./metascout_output/web-<timestamp>/`)
+as `report.html`/`report.json`.
 
 ```bash
 metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output

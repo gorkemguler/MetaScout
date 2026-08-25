@@ -17,7 +17,28 @@ def test_scan_requires_targets_or_manual_urls():
     client = app.test_client()
     resp = client.post("/scan", data={"targets": "", "manual_urls": ""})
     assert resp.status_code == 400
+    assert "target" in resp.data.decode().lower()
+
+
+def test_scan_requires_targets_or_manual_urls_turkish():
+    app = create_app()
+    client = app.test_client()
+    resp = client.post("/scan", data={"targets": "", "manual_urls": "", "ui_lang": "tr"})
+    assert resp.status_code == 400
     assert "hedef" in resp.data.decode().lower()
+
+
+def test_index_defaults_to_english_and_lang_query_switches_to_turkish():
+    app = create_app()
+    client = app.test_client()
+
+    html_en = client.get("/").data.decode()
+    assert '<html lang="en">' in html_en
+    assert "Targets (one per line" in html_en
+
+    html_tr = client.get("/?lang=tr").data.decode()
+    assert '<html lang="tr">' in html_tr
+    assert "Hedefler (her satıra" in html_tr
 
 
 def test_scan_derives_target_from_manual_urls_when_targets_empty(tmp_path):
