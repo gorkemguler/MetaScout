@@ -2,19 +2,25 @@ from __future__ import annotations
 
 import os
 from typing import Callable
+from urllib.parse import urlparse
 
 from .config import ScanConfig
 from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
-from .models import DiscoveredDocument, ScanFindings
+from .models import DiscoveredDocument, DiscoverySource, ScanFindings
 
 LogFn = Callable[[str], None]
 
 
 def _noop_log(message: str) -> None:
     pass
+
+
+def _ext_of(url: str) -> str:
+    path = urlparse(url).path
+    return path.rsplit(".", 1)[-1].lower() if "." in path else ""
 
 
 def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[DiscoveredDocument]:
@@ -122,6 +128,18 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
         )
 
     discovered = discover_all(cfg, log)
+
+    if cfg.manual_urls:
+        log(f"adding {len(cfg.manual_urls)} manually provided URL(s) ...")
+        existing_urls = {d.url for d in discovered}
+        added = 0
+        for url in cfg.manual_urls:
+            if url not in existing_urls:
+                discovered.append(DiscoveredDocument(url=url, source=DiscoverySource.MANUAL, filetype=_ext_of(url)))
+                existing_urls.add(url)
+                added += 1
+        log(f"  {added} new, {len(cfg.manual_urls) - added} already discovered")
+
     if not discovered:
         log("No documents discovered. Nothing to analyze.")
         return analyze([], targets=cfg.targets)

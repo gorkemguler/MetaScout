@@ -35,6 +35,7 @@
   - [Global kurulum (pipx)](#global-kurulum-pipx)
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Çoklu hedef taraması](#çoklu-hedef-taraması)
+- [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 - [Web arayüzü](#web-arayüzü)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Subdomain taraması](#subdomain-taraması)
@@ -279,6 +280,32 @@ metascout scan --targets-file domains.txt --subdomains
 her domain için ayrı ayrı kaç belge bulunduğunu gösteren bir **"Targets"**
 tablosu da yer alır.
 
+## Manuel URL listesiyle tarama
+
+Bir keşif motoru sizde çalışmadıysa (API engellendi, kota bitti, ne olursa)
+ve tarayıcıdan aramayla, başka bir araçla ya da herhangi bir yerden elle bir
+belge URL listesi topladıysanız, bunu doğrudan `--urls-file` ile verin. Bu
+URL'ler için keşif atlanır; motorların bulduğu her şey gibi indirilip
+analiz edilir ve rapora eklenir:
+
+```bash
+cat > urls.txt <<EOF
+# elle toplandı, google motoru reddetti
+https://example.com/reports/2023-annual.pdf
+https://example.com/files/internal-notes.docx
+EOF
+
+metascout scan --urls-file urls.txt
+```
+
+`--urls-file` kullanıldığında TARGETS'i atlayabilirsiniz — bu URL'lerin
+host'ları otomatik olarak hedef sayılır (rapor başlığı ve hedef bazlı
+dökümde kullanılır). Normal keşfi de manuel listeyle birlikte çalıştırmak
+isterseniz TARGETS veya `--targets-file` de verebilirsiniz; sonuçlar URL'ye
+göre birleştirilip tekilleştirilir, yani bir motorun zaten bulduğu bir belge
+manuel dosyanızda da varsa raporda iki kez görünmez. Web arayüzünde de aynı
+alan "Manuel URL listesi" olarak mevcuttur.
+
 ## Web arayüzü
 
 Terminale komut yazmak yerine tarayıcıdan form doldurarak taramak isterseniz:
@@ -288,7 +315,9 @@ metascout web
 ```
 
 Bu, `http://127.0.0.1:8765/` adresinde yerel bir arayüz açar (tarayıcınızda
-otomatik açılır). Hedefleri (birden fazla, her satıra bir tane), dosya
+otomatik açılır). Hedefleri (birden fazla, her satıra bir tane), opsiyonel
+manuel URL listesini (bkz. [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
+— hedefleri boş bırakırsanız URL'lerden otomatik çıkarılır), dosya
 uzantılarını, keşif motorlarını, subdomain seçeneğini ve rapor dilini
 (İngilizce/Türkçe) forma girip "Taramayı başlat"a basmanız yeterli. Tarama
 bitince sonuç raporu doğrudan tarayıcıda açılır; ayrıca `--output-dir` altına
@@ -411,6 +440,7 @@ metascout web --help
 | Seçenek | Varsayılan | Açıklama |
 |---|---|---|
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
+| `--urls-file` | – | Satır başına bir tam belge URL'i içeren, keşfi atlayıp doğrudan taranacak dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
 | `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |

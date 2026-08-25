@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import webbrowser
 from datetime import datetime
+from urllib.parse import urlparse
 
 from flask import Flask, request
 
@@ -78,8 +79,15 @@ _FORM_BODY = """
 {exiftool_block}
 <form class="card" method="post" action="/scan" onsubmit="document.getElementById('submit-btn').disabled=true;document.getElementById('submit-btn').textContent='Taranıyor…';document.getElementById('scanning').className='scanning active';">
   <label for="targets">Hedefler (her satıra bir tane, domain veya URL)</label>
-  <textarea id="targets" name="targets" placeholder="example.com&#10;example.org&#10;another-example.net" required>{targets_value}</textarea>
-  <div class="hint">Bir kuruma ait birden fazla domaini aynı anda tarayıp tek raporda birleştirebilirsiniz.</div>
+  <textarea id="targets" name="targets" placeholder="example.com&#10;example.org&#10;another-example.net">{targets_value}</textarea>
+  <div class="hint">Bir kuruma ait birden fazla domaini aynı anda tarayıp tek raporda birleştirebilirsiniz.
+  Aşağıya manuel URL listesi girdiyseniz burayı boş bırakabilirsiniz — hedef otomatik çıkarılır.</div>
+
+  <label for="manual_urls">Manuel URL listesi (opsiyonel, her satıra bir tam belge URL'i)</label>
+  <textarea id="manual_urls" name="manual_urls" placeholder="https://example.com/reports/2023.pdf&#10;https://example.com/files/notes.docx">{manual_urls_value}</textarea>
+  <div class="hint">Bir motor çalışmadıysa ya da elle topladığınız linkleriniz varsa buraya yapıştırın —
+  keşif motorlarını atlayıp bu URL'ler doğrudan indirilip analiz edilir ve rapora eklenir. Keşifle
+  bulunan bir belgeyle aynı URL ise tekrar eklenmez.</div>
 
   <label for="filetypes">Dosya uzantıları</label>
   <input type="text" id="filetypes" name="filetypes" value="{filetypes_value}">
@@ -128,7 +136,12 @@ _FORM_BODY = """
 """
 
 
-def _render_form(error: str | None = None, targets_value: str = "", filetypes_value: str | None = None) -> str:
+def _render_form(
+    error: str | None = None,
+    targets_value: str = "",
+    manual_urls_value: str = "",
+    filetypes_value: str | None = None,
+) -> str:
     error_block = f'<div class="error">{error}</div>' if error else ""
     exiftool_block = (
         ""
@@ -142,6 +155,7 @@ def _render_form(error: str | None = None, targets_value: str = "", filetypes_va
         error_block=error_block,
         exiftool_block=exiftool_block,
         targets_value=targets_value,
+        manual_urls_value=manual_urls_value,
         filetypes_value=filetypes_value or ",".join(DEFAULT_FILETYPES),
         google_checked="checked" if google_ready else "",
         serper_checked="checked" if serper_ready else "",
@@ -164,8 +178,17 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
     def scan():
         raw_targets = request.form.get("targets", "")
         targets = [t.strip() for t in raw_targets.replace(",", "\n").splitlines() if t.strip()]
+
+        raw_manual_urls = request.form.get("manual_urls", "")
+        manual_urls = list(dict.fromkeys(u.strip() for u in raw_manual_urls.splitlines() if u.strip()))
+
         if not targets:
-            return _render_form(error="En az bir hedef girin."), 400
+            targets = sorted({urlparse(u).netloc for u in manual_urls if urlparse(u).netloc})
+        if not targets:
+            return _render_form(
+                error="En az bir hedef ya da geçerli bir manuel URL girin.",
+                targets_value=raw_targets, manual_urls_value=raw_manual_urls,
+            ), 400
 
         filetypes_value = request.form.get("filetypes", ",".join(DEFAULT_FILETYPES))
         filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
@@ -178,11 +201,15 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             max_docs = max(1, int(request.form.get("max_docs") or 30))
             max_crawl_pages = max(1, int(request.form.get("max_crawl_pages") or 100))
         except ValueError:
-            return _render_form(error="Sayısal alanlar geçersiz.", targets_value=raw_targets, filetypes_value=filetypes_value), 400
+            return _render_form(
+                error="Sayısal alanlar geçersiz.", targets_value=raw_targets,
+                manual_urls_value=raw_manual_urls, filetypes_value=filetypes_value,
+            ), 400
 
         run_dir = os.path.join(output_dir, "web-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
         cfg = ScanConfig(
             targets=targets,
+            manual_urls=manual_urls,
             filetypes=filetypes,
             engines=engines,
             max_docs=max_docs,
@@ -202,7 +229,10 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         try:
             findings = run_scan(cfg, log=_log)
         except RuntimeError as exc:
-            return _render_form(error=str(exc), targets_value=raw_targets, filetypes_value=filetypes_value), 500
+            return _render_form(
+                error=str(exc), targets_value=raw_targets,
+                manual_urls_value=raw_manual_urls, filetypes_value=filetypes_value,
+            ), 500
 
         os.makedirs(run_dir, exist_ok=True)
         html = render_html_report(findings, lang=report_lang)

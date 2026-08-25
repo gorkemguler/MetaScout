@@ -14,7 +14,10 @@ def _safe_filename(url: str, filetype: str) -> str:
     digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
     base = os.path.basename(urlparse(url).path) or "document"
     base = "".join(c for c in base if c.isalnum() or c in "._-")[:80]
-    if not base.lower().endswith(f".{filetype}"):
+    # filetype can be empty for manually-supplied URLs without a recognizable
+    # extension (e.g. a download endpoint like /files?id=123); leave the name
+    # as-is rather than appending a bare trailing dot.
+    if filetype and not base.lower().endswith(f".{filetype}"):
         base = f"{base}.{filetype}"
     return f"{digest}_{base}"
 

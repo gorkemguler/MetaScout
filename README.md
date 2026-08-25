@@ -35,6 +35,7 @@
   - [Global install (pipx)](#global-install-pipx)
 - [Quick start](#quick-start)
 - [Scanning multiple targets](#scanning-multiple-targets)
+- [Scanning a manual URL list](#scanning-a-manual-url-list)
 - [Web UI](#web-ui)
 - [Wayback Machine discovery](#wayback-machine-discovery)
 - [Subdomain enumeration](#subdomain-enumeration)
@@ -278,6 +279,32 @@ When more than one target is given, the generated `report.html`/`report.json`
 includes a **"Targets"** table breaking down how many documents were found per
 domain.
 
+## Scanning a manual URL list
+
+If a discovery engine didn't work for you (blocked API, exhausted quota,
+whatever) and you ended up gathering a list of document URLs by hand — from a
+browser search, another tool, anywhere — feed that list straight in with
+`--urls-file`. Discovery is skipped for those; they're downloaded, analyzed,
+and included in the report exactly like anything else the engines find:
+
+```bash
+cat > urls.txt <<EOF
+# gathered manually, google engine was rejected
+https://example.com/reports/2023-annual.pdf
+https://example.com/files/internal-notes.docx
+EOF
+
+metascout scan --urls-file urls.txt
+```
+
+TARGETS can be omitted when `--urls-file` is used — the hostnames of those
+URLs become the targets automatically (used for the report header and the
+per-target breakdown). Pass TARGETS or `--targets-file` as well to also run
+normal discovery alongside the manual list; results are merged and deduped
+by URL, so a document already found by an engine won't be listed twice just
+because it's also in your manual file. The web UI has the same field under
+"Manuel URL listesi".
+
 ## Web UI
 
 If you'd rather fill out a browser form than type CLI flags:
@@ -287,11 +314,13 @@ metascout web
 ```
 
 This opens a local UI at `http://127.0.0.1:8765/` (launches in your browser
-automatically). Enter your targets (one per line), file extensions, discovery
-engines, the subdomain toggle, and the report language (English or Turkish),
-then hit "Taramayı başlat" (Start scan). When the scan finishes, the report
-opens right in the browser; it's also saved under `--output-dir` (default
-`./metascout_output/web-<timestamp>/`) as `report.html`/`report.json`.
+automatically). Enter your targets (one per line), an optional manual URL
+list (see [Scanning a manual URL list](#scanning-a-manual-url-list) — leave
+targets empty and it'll derive them from the URLs), file extensions,
+discovery engines, the subdomain toggle, and the report language (English or
+Turkish), then hit "Taramayı başlat" (Start scan). When the scan finishes,
+the report opens right in the browser; it's also saved under `--output-dir`
+(default `./metascout_output/web-<timestamp>/`) as `report.html`/`report.json`.
 
 ```bash
 metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output
@@ -406,6 +435,7 @@ metascout web --help
 | Option | Default | Description |
 |---|---|---|
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
+| `--urls-file` | – | File with one full document URL per line to scan directly, skipping discovery for those (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
 | `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,google,serper,brave` |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |

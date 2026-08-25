@@ -12,6 +12,7 @@ DEFAULT_USER_AGENT = "MetaScout/0.1 (+authorized-metadata-recon-tool)"
 @dataclass
 class ScanConfig:
     targets: list[str]
+    manual_urls: list[str] = field(default_factory=list)
     filetypes: list[str] = field(default_factory=lambda: list(DEFAULT_FILETYPES))
     engines: list[str] = field(default_factory=lambda: ["crawl", "sitemap"])
     max_docs: int = 50

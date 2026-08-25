@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from urllib.parse import urlparse
 
 import click
 from dotenv import find_dotenv, load_dotenv
@@ -86,6 +87,27 @@ def _collect_targets(targets: tuple[str, ...], targets_file: str | None) -> list
     return list(dict.fromkeys(t.strip() for t in all_targets if t.strip()))
 
 
+def _collect_urls(urls_file: str | None) -> list[str]:
+    if not urls_file:
+        return []
+    urls: list[str] = []
+    with open(urls_file, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                urls.append(line)
+    return list(dict.fromkeys(urls))
+
+
+def _hosts_of(urls: list[str]) -> list[str]:
+    hosts = []
+    for u in urls:
+        host = urlparse(u).netloc
+        if host:
+            hosts.append(host)
+    return sorted(set(hosts))
+
+
 @click.group()
 def main() -> None:
     """MetaScout — document discovery and metadata reconnaissance tool."""
@@ -98,6 +120,7 @@ def main() -> None:
 @main.command()
 @click.argument("targets", nargs=-1)
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
+@click.option("--urls-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one full document URL per line to scan directly (# comments allowed) — e.g. links you gathered by hand when an engine didn't work. Skips discovery for those URLs; still downloaded, analyzed, and included in the report like any other result.")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
 @click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,wayback,google,serper,brave. Defaults to crawl,sitemap,wayback plus google/serper/brave automatically if their API keys are set.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
@@ -118,7 +141,7 @@ def main() -> None:
 @click.option("--html-report/--no-html-report", default=True)
 @click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Language for the HTML report.")
 def scan(
-    targets: tuple[str, ...], targets_file: str | None, filetypes: str, engines: str, max_docs: int,
+    targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
@@ -133,14 +156,21 @@ def scan(
     Or read from a file (one per line) with --targets-file. All targets are
     scanned and merged into a single report.
 
+    TARGETS/--targets-file can be omitted if --urls-file is given instead —
+    the hostnames of those URLs are then used as the targets automatically.
+
     Only run this against sites you are authorized to test.
     """
     all_targets = _collect_targets(targets, targets_file)
+    manual_urls = _collect_urls(urls_file)
     if not all_targets:
-        raise click.UsageError("Provide at least one TARGET or --targets-file.")
+        all_targets = _hosts_of(manual_urls)
+    if not all_targets:
+        raise click.UsageError("Provide at least one TARGET, --targets-file, or --urls-file with valid URLs.")
 
     cfg = ScanConfig(
         targets=all_targets,
+        manual_urls=manual_urls,
         filetypes=[f.strip().lower().lstrip(".") for f in filetypes.split(",") if f.strip()],
         engines=[e.strip().lower() for e in engines.split(",") if e.strip()],
         max_docs=max_docs,
