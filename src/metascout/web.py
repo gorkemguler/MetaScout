@@ -36,8 +36,8 @@ _STRINGS = {
                          "the current amount).",
         "ddgs_hint": "'ddgs' needs no key at all — it scrapes DuckDuckGo (and, with 'auto', falls "
                      "back across other engines) directly, so it's the most fragile option here and "
-                     "can get rate-limited under heavy use. Off by default; try it if the others "
-                     "aren't working for you.",
+                     "can get rate-limited under heavy use. On by default since it's reliable in "
+                     "practice; uncheck it if you'd rather not depend on a scraper.",
         "subdomains_label": "Subdomain enumeration (crt.sh)",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
@@ -79,8 +79,8 @@ _STRINGS = {
                          "'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin).",
         "ddgs_hint": "'ddgs' hiçbir anahtar gerektirmez — doğrudan DuckDuckGo'yu (ve 'auto' modunda "
                      "yedek olarak diğer motorları) kazır, bu yüzden buradaki en kırılgan seçenektir "
-                     "ve yoğun kullanımda hız sınırına takılabilir. Varsayılan kapalı; diğerleri "
-                     "sizde çalışmıyorsa deneyin.",
+                     "ve yoğun kullanımda hız sınırına takılabilir. Pratikte güvenilir olduğu için "
+                     "varsayılan açık; bir kazıyıcıya bağımlı olmak istemiyorsanız işaretini kaldırın.",
         "subdomains_label": "Subdomain keşfi (crt.sh)",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
@@ -216,7 +216,7 @@ _FORM_BODY = """
     <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
     <label><input type="checkbox" name="engines" value="serper" {serper_checked}> serper{serper_hint}</label>
     <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
-    <label><input type="checkbox" name="engines" value="ddgs"> ddgs</label>
+    <label><input type="checkbox" name="engines" value="ddgs" checked> ddgs</label>
   </div>
   <div class="hint">{engines_hint}</div>
   <div class="hint">{ddgs_hint}</div>
@@ -345,7 +345,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         filetypes_value = request.form.get("filetypes", ",".join(DEFAULT_FILETYPES))
         filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
-        engines = request.form.getlist("engines") or ["crawl", "sitemap", "wayback"]
+        engines = request.form.getlist("engines") or ["crawl", "sitemap", "wayback", "ddgs"]
         subdomains = request.form.get("subdomains") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):

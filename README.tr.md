@@ -241,9 +241,10 @@ komutu hangi dizinde olursanız olun, venv aktive etmeden çalışır.
 metascout scan example.com
 ```
 
-Varsayılan olarak site taraması (`crawl`) ve `sitemap.xml` kullanılır, API
-anahtarı gerekmez. Sonuçlar `./metascout_output/report.html` ve `report.json`
-dosyalarına yazılır.
+Varsayılan olarak site taraması (`crawl`), `sitemap.xml`, [Wayback
+Machine](#wayback-machine-keşfi) ve [DDGS](#anahtarsız-arama-ddgs) kullanılır
+— hiçbiri için API anahtarı gerekmez. Sonuçlar `./metascout_output/report.html`
+ve `report.json` dosyalarına yazılır.
 
 ```bash
 metascout scan example.com \
@@ -375,14 +376,14 @@ metascout scan example.com --engines ddgs
 ```
 
 Diğer anahtarsız motorlardan (`wayback`, `crawl`, `sitemap`) farklı olarak bu
-bir kazıyıcı, resmi bir API değil — bu yüzden buradaki en kırılgan seçenek:
-sonuçlar DDGS geliştiricilerinin her motorun bot-koruma önlemlerine karşı o an
-neyi çalışır durumda tuttuğuna bağlı, ve yoğun kullanımda hız sınırına
-takılabilir. Tam da bu yüzden **isteğe bağlı**: varsayılan motor setinde
-değil, `google`/`serper`/`brave` gibi anahtar bulununca otomatik eklenmiyor.
-Anahtar tabanlı motorlar sizde çalışmıyorsa ve yine de ücretsiz bir kaynak
-istiyorsanız `--engines ddgs` ile açıkça açın (varsayılanlara ekleyerek, ör.
-`--engines crawl,sitemap,wayback,ddgs`).
+bir kazıyıcı, resmi bir API değil — bu yüzden buradaki en kırılgan seçenek
+(prensipte): sonuçlar DDGS geliştiricilerinin her motorun bot-koruma
+önlemlerine karşı o an neyi çalışır durumda tuttuğuna bağlı, ve yoğun
+kullanımda hız sınırına takılabilir. Pratikte testlerde hızlı ve güvenilir
+çıktı (gerçek bir hedefte ~2 saniyede 26 gerçek PDF, art arda çalıştırmalarda
+hatasız), bu yüzden **varsayılan** motor setinde. Bir kazıyıcıya bağımlı
+olmak istemiyorsanız `--engines`'ten çıkarın (ya da web arayüzünde işaretini
+kaldırın).
 
 DDGS'in hangi motor(lar)ı sorgulayacağını `--ddgs-backend` ile seçebilirsiniz
 (varsayılan `auto`; `duckduckgo`, `google`, `bing` gibi tek bir motor ya da
@@ -470,7 +471,7 @@ metascout web --help
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--urls-file` | – | Satır başına bir tam belge URL'i içeren, keşfi atlayıp doğrudan taranacak dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave,ddgs` arasından virgülle liste |
+| `--engines` | `crawl,sitemap,wayback,ddgs` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave,ddgs` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |

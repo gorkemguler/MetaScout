@@ -36,11 +36,11 @@ def ddgs_dork_search(
     several engines (Bing, Brave, Google, Yandex, ...) until one responds.
 
     Since this is a scraper rather than an official API, it's the most
-    fragile engine here: result availability depends on whatever DDGS's
-    maintainers currently keep working against each engine's anti-bot
-    defenses, and sustained use can get rate-limited. Treat it as a free
-    bonus source, not a primary one — that's also why it's opt-in rather
-    than part of the default engine list.
+    fragile engine here in principle: result availability depends on
+    whatever DDGS's maintainers currently keep working against each engine's
+    anti-bot defenses, and sustained use can get rate-limited. In practice
+    it's been reliable and fast in testing, so it's part of the default
+    engine set — but treat it as a free bonus source, not a guaranteed one.
 
     A query genuinely matching nothing (most filetypes won't exist on most
     sites) surfaces from DDGS as an exception too, not an empty list — that
