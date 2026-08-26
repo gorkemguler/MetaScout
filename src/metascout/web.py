@@ -33,11 +33,17 @@ _STRINGS = {
                          "already rejects new Google Cloud projects — try "
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> '
                          "instead if you run into that (free credit included, check the site for "
-                         "the current amount).",
+                         "the current amount), or set the DDGS backend below to <code>google</code> "
+                         "for a keyless option.",
         "ddgs_hint": "'ddgs' needs no key at all — it scrapes DuckDuckGo (and, with 'auto', falls "
                      "back across other engines) directly, so it's the most fragile option here and "
                      "can get rate-limited under heavy use. On by default since it's reliable in "
                      "practice; uncheck it if you'd rather not depend on a scraper.",
+        "ddgs_backend_label": "DDGS backend",
+        "ddgs_backend_hint": "Which engine(s) 'ddgs' scrapes. Default 'auto' falls back across "
+                              "several; set a specific one like <code>google</code>, "
+                              "<code>duckduckgo</code>, or <code>bing</code>, or a comma-separated "
+                              "list to try in order.",
         "subdomains_label": "Subdomain enumeration (crt.sh)",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
@@ -76,11 +82,18 @@ _STRINGS = {
                          "işaretlenir. Google, Custom Search API'yi 1 Ocak 2027'de kapatıyor ve "
                          "yeni Google Cloud projelerini şimdiden reddediyor — sorun yaşarsanız "
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a>'
-                         "'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin).",
+                         "'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin), ya da "
+                         "anahtarsız bir seçenek için aşağıdaki DDGS motorunu <code>google</code> "
+                         "olarak ayarlayın.",
         "ddgs_hint": "'ddgs' hiçbir anahtar gerektirmez — doğrudan DuckDuckGo'yu (ve 'auto' modunda "
                      "yedek olarak diğer motorları) kazır, bu yüzden buradaki en kırılgan seçenektir "
                      "ve yoğun kullanımda hız sınırına takılabilir. Pratikte güvenilir olduğu için "
                      "varsayılan açık; bir kazıyıcıya bağımlı olmak istemiyorsanız işaretini kaldırın.",
+        "ddgs_backend_label": "DDGS motoru",
+        "ddgs_backend_hint": "'ddgs'in hangi motor(lar)ı kazıyacağı. Varsayılan 'auto' birkaç "
+                              "motor arasında yedeklemeli dener; <code>google</code>, "
+                              "<code>duckduckgo</code>, <code>bing</code> gibi belirli birini ya "
+                              "da sırayla denenecek virgülle ayrılmış bir liste girebilirsiniz.",
         "subdomains_label": "Subdomain keşfi (crt.sh)",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
@@ -221,6 +234,10 @@ _FORM_BODY = """
   <div class="hint">{engines_hint}</div>
   <div class="hint">{ddgs_hint}</div>
 
+  <label for="ddgs_backend">{ddgs_backend_label}</label>
+  <input type="text" id="ddgs_backend" name="ddgs_backend" value="{ddgs_backend_value}" placeholder="auto">
+  <div class="hint">{ddgs_backend_hint}</div>
+
   <label><input type="checkbox" name="subdomains"> {subdomains_label}</label>
 
   <label>{report_lang_label}</label>
@@ -254,6 +271,7 @@ def _render_form(
     targets_value: str = "",
     manual_urls_value: str = "",
     filetypes_value: str | None = None,
+    ddgs_backend_value: str = "",
 ) -> str:
     if ui_lang not in _STRINGS:
         ui_lang = "en"
@@ -288,6 +306,9 @@ def _render_form(
         engines_label=_t(ui_lang, "engines_label"),
         engines_hint=_t(ui_lang, "engines_hint"),
         ddgs_hint=_t(ui_lang, "ddgs_hint"),
+        ddgs_backend_label=_t(ui_lang, "ddgs_backend_label"),
+        ddgs_backend_hint=_t(ui_lang, "ddgs_backend_hint"),
+        ddgs_backend_value=ddgs_backend_value,
         subdomains_label=_t(ui_lang, "subdomains_label"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
@@ -337,10 +358,14 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         if not targets:
             targets = sorted({urlparse(u).netloc for u in manual_urls if urlparse(u).netloc})
+        raw_ddgs_backend = request.form.get("ddgs_backend", "")
+        ddgs_backend = raw_ddgs_backend.strip() or "auto"
+
         if not targets:
             return _render_form(
                 ui_lang=ui_lang, error=_t(ui_lang, "error_no_target"),
                 targets_value=raw_targets, manual_urls_value=raw_manual_urls,
+                ddgs_backend_value=raw_ddgs_backend,
             ), 400
 
         filetypes_value = request.form.get("filetypes", ",".join(DEFAULT_FILETYPES))
@@ -357,6 +382,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             return _render_form(
                 ui_lang=ui_lang, error=_t(ui_lang, "error_invalid_numbers"), targets_value=raw_targets,
                 manual_urls_value=raw_manual_urls, filetypes_value=filetypes_value,
+                ddgs_backend_value=raw_ddgs_backend,
             ), 400
 
         run_dir = os.path.join(output_dir, "web-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -369,6 +395,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             max_crawl_pages=max_crawl_pages,
             output_dir=run_dir,
             include_subdomains=subdomains,
+            ddgs_backend=ddgs_backend,
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
             serper_api_key=os.environ.get("SERPER_API_KEY"),
@@ -385,6 +412,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             return _render_form(
                 ui_lang=ui_lang, error=str(exc), targets_value=raw_targets,
                 manual_urls_value=raw_manual_urls, filetypes_value=filetypes_value,
+                ddgs_backend_value=raw_ddgs_backend,
             ), 500
 
         os.makedirs(run_dir, exist_ok=True)

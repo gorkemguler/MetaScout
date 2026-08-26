@@ -54,7 +54,9 @@ def google_dork_search(
     Google is discontinuing this API on 2027-01-01, and has already closed it
     to new customers — newly created Google Cloud projects get a permanent
     403 PERMISSION_DENIED regardless of configuration. If this keeps failing,
-    try the `serper` engine instead (see serper_dork_search below).
+    try the `serper` engine instead (see serper_dork_search below), or the
+    keyless `ddgs` engine with `backend="google"` (see discovery/ddgs_search.py)
+    — confirmed working live: real Google results, no API key at all.
 
     The free tier caps at 100 queries/day and 10 results/query (max start=91),
     so this stays well within default quotas for a handful of filetypes.

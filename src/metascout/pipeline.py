@@ -94,7 +94,8 @@ def discover_all(cfg: ScanConfig, log: LogFn = _noop_log) -> list[DiscoveredDocu
         log(
             "! google: Google, Custom Search JSON API'yi 1 Ocak 2027'de kapatıyor ve "
             "yeni Google Cloud projelerini şimdiden reddediyor (PERMISSION_DENIED). "
-            "Sorun yaşarsanız 'serper' motorunu deneyin (SERPER_API_KEY, https://serper.dev)."
+            "Sorun yaşarsanız 'serper' motorunu (SERPER_API_KEY, https://serper.dev) ya da "
+            "hiç anahtar gerektirmeyen '--engines ddgs --ddgs-backend google'ı deneyin."
         )
 
     found: dict[str, DiscoveredDocument] = {}
