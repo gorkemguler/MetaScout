@@ -38,6 +38,7 @@
 - [Scanning a manual URL list](#scanning-a-manual-url-list)
 - [Web UI](#web-ui)
 - [Wayback Machine discovery](#wayback-machine-discovery)
+- [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
@@ -359,6 +360,31 @@ not twice. Since that original URL is often exactly what's gone, MetaScout
 also keeps the actual archive.org snapshot address behind the scenes and
 downloads from there automatically if fetching the original URL fails.
 
+## Keyless search with DDGS
+
+The `ddgs` engine wraps [DDGS](https://pypi.org/project/ddgs/), a Python
+library that scrapes DuckDuckGo (and, with its default `auto` backend, falls
+back across Bing, Brave, Google, Yandex, and others) for `site:`/`filetype:`
+results with **no API key or account at all**:
+
+```bash
+metascout scan example.com --engines ddgs
+```
+
+Unlike the other keyless engines (`wayback`, `crawl`, `sitemap`), this one is
+a scraper rather than an official API, so it's the most fragile option here —
+results depend on whatever DDGS's maintainers currently keep working against
+each engine's anti-bot defenses, and sustained use can get rate-limited.
+That's why it's **opt-in**: not part of the default engine set, and not
+auto-added the way `google`/`serper`/`brave` are when a key is configured.
+Turn it on explicitly with `--engines ddgs` (add it alongside the defaults,
+e.g. `--engines crawl,sitemap,wayback,ddgs`) when the key-based engines
+aren't an option and you want a free source anyway.
+
+Pick which engine(s) DDGS itself queries with `--ddgs-backend` (default
+`auto`; also accepts a single engine like `duckduckgo`, `google`, or `bing`,
+or a comma-separated list to try in order).
+
 ## Subdomain enumeration
 
 `--subdomains` performs passive subdomain discovery via [crt.sh](https://crt.sh)
@@ -422,7 +448,7 @@ overrides this auto behavior, so you'd list the engines you want yourself.
   (a free "Data for AI" tier is available) and get your `X-Subscription-Token`.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave
+metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,ddgs
 ```
 
 ## Full CLI reference
@@ -440,7 +466,7 @@ metascout web --help
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
 | `--urls-file` | – | File with one full document URL per line to scan directly, skipping discovery for those (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,google,serper,brave` |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,google,serper,brave,ddgs` |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
 | `--max-subdomains` | `20` | Maximum subdomains to scan |
 | `--max-docs` | `50` | Maximum documents to download and analyze |
@@ -452,6 +478,7 @@ metascout web --help
 | `--output-dir` | `./metascout_output` | Output directory |
 | `--ignore-robots` | off | Ignore `robots.txt` (only with explicit authorization) |
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Can also be set via env var or `.env` |
+| `--ddgs-backend` | `auto` | Backend(s) for the `ddgs` engine, e.g. `duckduckgo`, `google`, `bing`, or a comma-separated list |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -487,6 +514,7 @@ src/metascout/
 │   ├── sitemap.py         sitemap.xml / sitemap index parsing
 │   ├── wayback.py         Wayback Machine (archive.org) CDX API discovery
 │   ├── search_engines.py  Google/Serper/Brave dork search
+│   ├── ddgs_search.py     keyless DDGS (DuckDuckGo/other engines) dork search
 │   └── subdomains.py      passive subdomain discovery via crt.sh
 ├── downloader.py           concurrent downloads, size cap, sha256
 ├── metadata/
@@ -526,7 +554,7 @@ and place it in a folder on PATH (see the Windows install steps above).
 **`No documents discovered`**
 The target has no publicly linked documents matching your extensions
 (default: `pdf,doc,docx,...`), or `robots.txt` is blocking the crawler. Try a
-wider net with `--engines crawl,sitemap,wayback,google,serper,brave`, or (only if you're
+wider net with `--engines crawl,sitemap,wayback,google,serper,brave,ddgs`, or (only if you're
 authorized) `--ignore-robots`.
 
 **crt.sh is unresponsive / slow**

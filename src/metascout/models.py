@@ -12,6 +12,7 @@ class DiscoverySource(str, Enum):
     CRAWL = "crawl"
     SITEMAP = "sitemap"
     WAYBACK = "wayback"
+    DDGS = "ddgs"
     MANUAL = "manual"
 
 

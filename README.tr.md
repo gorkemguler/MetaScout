@@ -38,6 +38,7 @@
 - [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 - [Web arayüzü](#web-arayüzü)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
+- [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
@@ -362,6 +363,31 @@ olmayan" şey olduğu için, MetaScout arka planda gerçek archive.org
 anlık görüntü adresini de tutar ve orijinal URL'den indirme başarısız
 olursa otomatik olarak oradan indirir.
 
+## Anahtarsız arama: DDGS
+
+`ddgs` motoru, [DDGS](https://pypi.org/project/ddgs/) adlı Python kütüphanesini
+kullanıyor — DuckDuckGo'yu (ve varsayılan `auto` modunda yedek olarak
+Bing, Brave, Google, Yandex gibi başka motorları) kazıyarak `site:`/`filetype:`
+sonuçlarını **hiçbir API anahtarı ya da hesap olmadan** getiriyor:
+
+```bash
+metascout scan example.com --engines ddgs
+```
+
+Diğer anahtarsız motorlardan (`wayback`, `crawl`, `sitemap`) farklı olarak bu
+bir kazıyıcı, resmi bir API değil — bu yüzden buradaki en kırılgan seçenek:
+sonuçlar DDGS geliştiricilerinin her motorun bot-koruma önlemlerine karşı o an
+neyi çalışır durumda tuttuğuna bağlı, ve yoğun kullanımda hız sınırına
+takılabilir. Tam da bu yüzden **isteğe bağlı**: varsayılan motor setinde
+değil, `google`/`serper`/`brave` gibi anahtar bulununca otomatik eklenmiyor.
+Anahtar tabanlı motorlar sizde çalışmıyorsa ve yine de ücretsiz bir kaynak
+istiyorsanız `--engines ddgs` ile açıkça açın (varsayılanlara ekleyerek, ör.
+`--engines crawl,sitemap,wayback,ddgs`).
+
+DDGS'in hangi motor(lar)ı sorgulayacağını `--ddgs-backend` ile seçebilirsiniz
+(varsayılan `auto`; `duckduckgo`, `google`, `bing` gibi tek bir motor ya da
+sırayla denenecek virgülle ayrılmış bir liste de verilebilir).
+
 ## Subdomain taraması
 
 `--subdomains` ile [crt.sh](https://crt.sh) (Certificate Transparency log arama,
@@ -426,7 +452,7 @@ zaman istediğiniz motorları kendiniz listelemeniz gerekir.
   anahtarınızı alın.
 
 ```bash
-metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave
+metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,ddgs
 ```
 
 ## Tüm CLI seçenekleri
@@ -444,7 +470,7 @@ metascout web --help
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--urls-file` | – | Satır başına bir tam belge URL'i içeren, keşfi atlayıp doğrudan taranacak dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave` arasından virgülle liste |
+| `--engines` | `crawl,sitemap` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave,ddgs` arasından virgülle liste |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |
@@ -456,6 +482,7 @@ metascout web --help
 | `--output-dir` | `./metascout_output` | Çıktı klasörü |
 | `--ignore-robots` | kapalı | `robots.txt`'i yok say (yalnızca açık izniniz varsa) |
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
+| `--ddgs-backend` | `auto` | `ddgs` motoru için motor(lar), ör. `duckduckgo`, `google`, `bing` ya da virgülle ayrılmış liste |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -491,6 +518,7 @@ src/metascout/
 │   ├── sitemap.py         sitemap.xml / sitemap index ayrıştırma
 │   ├── wayback.py         Wayback Machine (archive.org) CDX API keşfi
 │   ├── search_engines.py  Google/Serper/Brave dork araması
+│   ├── ddgs_search.py     anahtarsız DDGS (DuckDuckGo/diğer motorlar) dork araması
 │   └── subdomains.py      crt.sh üzerinden pasif subdomain keşfi
 ├── downloader.py           eşzamanlı indirme, boyut sınırı, sha256
 ├── metadata/
@@ -531,7 +559,7 @@ Windows kurulum adımlarına bakın).
 **`No documents discovered`**
 Hedefte seçtiğiniz uzantılarda (varsayılan: `pdf,doc,docx,...`) herkese açık
 belge yok, ya da `robots.txt` crawler'ı engelliyor olabilir. `--engines
-crawl,sitemap,wayback,google,serper,brave` ile daha geniş kapsam deneyin ya da (yalnızca
+crawl,sitemap,wayback,google,serper,brave,ddgs` ile daha geniş kapsam deneyin ya da (yalnızca
 yetkiniz varsa) `--ignore-robots` kullanın.
 
 **crt.sh yanıt vermiyor / yavaş**

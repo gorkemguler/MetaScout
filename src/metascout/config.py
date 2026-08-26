@@ -30,3 +30,4 @@ class ScanConfig:
     google_cse_id: str | None = None
     serper_api_key: str | None = None
     brave_api_key: str | None = None
+    ddgs_backend: str = "auto"

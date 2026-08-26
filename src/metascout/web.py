@@ -34,6 +34,10 @@ _STRINGS = {
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> '
                          "instead if you run into that (free credit included, check the site for "
                          "the current amount).",
+        "ddgs_hint": "'ddgs' needs no key at all — it scrapes DuckDuckGo (and, with 'auto', falls "
+                     "back across other engines) directly, so it's the most fragile option here and "
+                     "can get rate-limited under heavy use. Off by default; try it if the others "
+                     "aren't working for you.",
         "subdomains_label": "Subdomain enumeration (crt.sh)",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
@@ -73,6 +77,10 @@ _STRINGS = {
                          "yeni Google Cloud projelerini şimdiden reddediyor — sorun yaşarsanız "
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a>'
                          "'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin).",
+        "ddgs_hint": "'ddgs' hiçbir anahtar gerektirmez — doğrudan DuckDuckGo'yu (ve 'auto' modunda "
+                     "yedek olarak diğer motorları) kazır, bu yüzden buradaki en kırılgan seçenektir "
+                     "ve yoğun kullanımda hız sınırına takılabilir. Varsayılan kapalı; diğerleri "
+                     "sizde çalışmıyorsa deneyin.",
         "subdomains_label": "Subdomain keşfi (crt.sh)",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
@@ -208,8 +216,10 @@ _FORM_BODY = """
     <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
     <label><input type="checkbox" name="engines" value="serper" {serper_checked}> serper{serper_hint}</label>
     <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
+    <label><input type="checkbox" name="engines" value="ddgs"> ddgs</label>
   </div>
   <div class="hint">{engines_hint}</div>
+  <div class="hint">{ddgs_hint}</div>
 
   <label><input type="checkbox" name="subdomains"> {subdomains_label}</label>
 
@@ -277,6 +287,7 @@ def _render_form(
         filetypes_label=_t(ui_lang, "filetypes_label"),
         engines_label=_t(ui_lang, "engines_label"),
         engines_hint=_t(ui_lang, "engines_hint"),
+        ddgs_hint=_t(ui_lang, "ddgs_hint"),
         subdomains_label=_t(ui_lang, "subdomains_label"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",

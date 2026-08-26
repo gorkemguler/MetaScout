@@ -5,7 +5,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .config import ScanConfig
-from .discovery import brave_dork_search, crawl_site, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
+from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
@@ -68,6 +68,12 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                 docs = brave_dork_search(
                     host, cfg.filetypes,
                     api_key=cfg.brave_api_key, timeout=cfg.request_timeout,
+                    max_results_per_type=cfg.max_docs,
+                )
+            elif engine == "ddgs":
+                docs = ddgs_dork_search(
+                    host, cfg.filetypes,
+                    timeout=cfg.request_timeout, backend=cfg.ddgs_backend,
                     max_results_per_type=cfg.max_docs,
                 )
             else:

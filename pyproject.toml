@@ -21,6 +21,7 @@ dependencies = [
     "rich>=13.7",
     "python-dotenv>=1.0",
     "flask>=3.0",
+    "ddgs>=9.0",
 ]
 
 [project.scripts]

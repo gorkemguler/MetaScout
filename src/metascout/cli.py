@@ -122,7 +122,8 @@ def main() -> None:
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--urls-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one full document URL per line to scan directly (# comments allowed) — e.g. links you gathered by hand when an engine didn't work. Skips discovery for those URLs; still downloaded, analyzed, and included in the report like any other result.")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,wayback,google,serper,brave. Defaults to crawl,sitemap,wayback plus google/serper/brave automatically if their API keys are set.")
+@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,wayback,ddgs,google,serper,brave. Defaults to crawl,sitemap,wayback plus google/serper/brave automatically if their API keys are set. 'ddgs' is opt-in (see --help for the full list) — it needs no key but scrapes DuckDuckGo/other engines, so it's not on by default.")
+@click.option("--ddgs-backend", default="auto", show_default=True, help="Backend(s) for the 'ddgs' engine, e.g. duckduckgo, google, bing, brave, or 'auto' to fall back across several.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
 @click.option("--max-crawl-depth", default=3, show_default=True)
@@ -141,7 +142,7 @@ def main() -> None:
 @click.option("--html-report/--no-html-report", default=True)
 @click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Language for the HTML report.")
 def scan(
-    targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, max_docs: int,
+    targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
@@ -173,6 +174,7 @@ def scan(
         manual_urls=manual_urls,
         filetypes=[f.strip().lower().lstrip(".") for f in filetypes.split(",") if f.strip()],
         engines=[e.strip().lower() for e in engines.split(",") if e.strip()],
+        ddgs_backend=ddgs_backend,
         max_docs=max_docs,
         max_crawl_pages=max_crawl_pages,
         max_crawl_depth=max_crawl_depth,
