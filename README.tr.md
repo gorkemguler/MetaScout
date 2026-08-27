@@ -389,12 +389,19 @@ DDGS'in hangi motor(lar)ı sorgulayacağını `--ddgs-backend` ile seçebilirsin
 (varsayılan `auto`; `duckduckgo`, `google`, `bing` gibi tek bir motor ya da
 sırayla denenecek virgülle ayrılmış bir liste de verilebilir). Özellikle
 `--ddgs-backend google`, `google_dork_search` ve Serper'in de kullandığı
-gerçek Google arama sonuçlarını **hiç API anahtarı olmadan** verir (canlı
-doğrulandı: gerçek bir hedefte ~1.4 saniyede 26 gerçek PDF). Ücretli bir
-Serper anahtarına ya da kapatılmakta olan Google API'sine ([Arama motoru API
-anahtarları](#arama-motoru-api-anahtarları-opsiyonel) bölümüne bakın) başvurmadan önce
-denemeye değer, ücretsiz bir seçenek. Aynı alan web arayüzünde
-"DDGS motoru" olarak sunulur.
+gerçek Google arama sonuçlarını **hiç API anahtarı olmadan** verir. Motor,
+DDGS'in tek-sayfa sınırını aşmak için her filetype için birden fazla sonuç
+sayfasını dener (başarısız sayfalarda yeniden deneme/backoff ile), ama
+Google'ın botlara karşı savunması buna gerçekte ciddi direnç gösteriyor:
+aynı gerçek hedefe karşı tekrarlanan canlı testlerde, sayfalama olmadan tek
+sayfada 26 sonuç bulunurken, sayfalama açıkken ~300 gerçek sonuçtan 50 ile
+114 arası (bazen de motor geçici olarak bloke olduğunda 0) sonuç elde
+edildi. `ddgs`+`google`'ı, ücretsiz ve kurulum gerektirmeyen bir kısmi
+örnekleme/tek seferlik sorgu çözümü olarak görün — `serper`'in ya da
+Google'ın (yakında kapatılacak) kendi API'sinin yerine geçen hacimli/eksiksiz
+bir çözüm olarak değil (bkz. [Arama motoru API
+anahtarları](#arama-motoru-api-anahtarları-opsiyonel)). Aynı alan web
+arayüzünde "DDGS motoru" olarak sunulur.
 
 ## Subdomain taraması
 

@@ -56,7 +56,10 @@ def google_dork_search(
     403 PERMISSION_DENIED regardless of configuration. If this keeps failing,
     try the `serper` engine instead (see serper_dork_search below), or the
     keyless `ddgs` engine with `backend="google"` (see discovery/ddgs_search.py)
-    — confirmed working live: real Google results, no API key at all.
+    for a partial, no-key sample of real Google results — it paginates with
+    retries, but Google's anti-scraping defenses cap how much it can recover
+    (confirmed live: anywhere from 0 to ~40% of the real result count,
+    depending on how hard Google is blocking at the time).
 
     The free tier caps at 100 queries/day and 10 results/query (max start=91),
     so this stays well within default quotas for a handful of filetypes.

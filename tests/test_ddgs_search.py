@@ -44,7 +44,8 @@ def test_ddgs_dork_search_filters_by_extension_client_side():
 
 
 def test_ddgs_dork_search_raises_with_detail_on_first_query_failure():
-    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(RuntimeError("rate limited"))):
+    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(RuntimeError("rate limited"))), \
+            patch("metascout.discovery.ddgs_search.time.sleep"):
         with pytest.raises(RuntimeError, match="rate limited"):
             ddgs_dork_search("example.com", ["pdf"])
 
@@ -60,7 +61,8 @@ def test_ddgs_dork_search_degrades_gracefully_after_partial_results():
             return doc_payload
         raise RuntimeError("blocked")
 
-    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(side_effect)):
+    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(side_effect)), \
+            patch("metascout.discovery.ddgs_search.time.sleep"):
         docs = ddgs_dork_search("example.com", ["doc", "pdf"])
 
     assert [d.url for d in docs] == ["https://example.com/a.doc"]
@@ -93,7 +95,8 @@ def test_ddgs_dork_search_no_results_for_one_filetype_does_not_block_another():
 
 
 def test_ddgs_dork_search_real_ratelimit_error_still_raises():
-    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(DDGSException("Ratelimit"))):
+    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(DDGSException("Ratelimit"))), \
+            patch("metascout.discovery.ddgs_search.time.sleep"):
         with pytest.raises(RuntimeError, match="Ratelimit"):
             ddgs_dork_search("example.com", ["pdf"])
 
@@ -101,13 +104,14 @@ def test_ddgs_dork_search_real_ratelimit_error_still_raises():
 def test_ddgs_dork_search_passes_query_and_backend_through():
     captured = {}
 
-    def side_effect(query, backend=None, max_results=None):
+    def side_effect(query, backend=None, max_results=None, page=None):
         captured["query"] = query
         captured["backend"] = backend
         captured["max_results"] = max_results
         return []
 
-    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(side_effect)):
+    with patch("metascout.discovery.ddgs_search.DDGS", return_value=_mock_ddgs(side_effect)), \
+            patch("metascout.discovery.ddgs_search.time.sleep"):
         ddgs_dork_search("example.com", ["pdf"], backend="duckduckgo", max_results_per_type=15)
 
     assert captured["query"] == "site:example.com filetype:pdf"

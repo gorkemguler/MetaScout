@@ -387,11 +387,17 @@ Pick which engine(s) DDGS itself queries with `--ddgs-backend` (default
 `auto`; also accepts a single engine like `duckduckgo`, `google`, or `bing`,
 or a comma-separated list to try in order). Notably, `--ddgs-backend google`
 gets you real Google search results — the same source `google_dork_search`
-and Serper both hit — with **no API key at all** (confirmed live: 26 real
-PDFs in ~1.4s against a real target). It's a free option worth trying before
-reaching for a paid Serper key or fighting Google's own API, which is being
-discontinued (see [Search engine API keys](#search-engine-api-keys-optional) below).
-The same field is exposed in the web UI as "DDGS backend".
+and Serper both hit — with **no API key at all**. The engine walks multiple
+result pages per filetype (with retries/backoff on failed pages) to get past
+DDGS's own one-page-per-call limit, but Google's scraping defenses push back
+hard on this in practice: across repeated live tests against the same real
+target, a single dork went from 26 results (one page, no pagination) up to
+anywhere between 50 and 114 out of ~300 real matches with pagination enabled
+— and occasionally 0, when Google was mid-block. Treat `ddgs`+`google` as a
+free, no-setup way to grab a partial sample or unblock a one-off query, not
+as a volume-complete substitute for `serper` or Google's own (soon
+discontinued) API — see [Search engine API keys](#search-engine-api-keys-optional)
+below for those. The same field is exposed in the web UI as "DDGS backend".
 
 ## Subdomain enumeration
 
