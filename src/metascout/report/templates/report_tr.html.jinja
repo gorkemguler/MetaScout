@@ -127,9 +127,12 @@
       <span class="meta-item">Taranan belge: <strong>{{ findings.documents | length }}</strong></span>
       {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length %}
       {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length %}
-      {% if total_findings == 0 %}
+      {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
+      {% if total_findings == 0 and not findings.content_findings %}
         <span class="badge badge-none">Bulgu Yok</span>
-      {% elif sensitive_hits == 0 %}
+      {% elif critical_content_hits > 0 %}
+        <span class="badge badge-high">Yüksek Risk</span>
+      {% elif sensitive_hits == 0 and not findings.content_findings %}
         <span class="badge badge-low">Düşük Risk</span>
       {% elif sensitive_hits <= 10 %}
         <span class="badge badge-medium">Orta Risk</span>
@@ -159,6 +162,14 @@
           Doğrudan kullanıcı/e-posta/sunucu sızıntısı tespit edilmedi; bulgular çoğunlukla
           yazılım ve işletim sistemi bilgisinden oluşuyor.
         {% endif %}
+        {% if findings.content_findings %}
+          Ayrıca, isteğe bağlı belge içeriği taramasında
+          <strong>{{ findings.content_findings | length }}</strong> potansiyel kişisel/kritik veri
+          bulgusu{% if critical_content_hits > 0 %}, bunların arasında
+          <strong>{{ critical_content_hits }}</strong> checksum ile doğrulanmış TC kimlik/IBAN/kart
+          numarası{% endif %} tespit edildi — aşağıdaki <a href="#content-scan">İçerik Taraması</a>
+          bölümüne bakın. Bunlar sezgiseldir: her birini elle doğrulayın.
+        {% endif %}
       {% endif %}
     </p>
 
@@ -171,6 +182,9 @@
       <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6.5" rx="1.5"/><rect x="3" y="13.5" width="18" height="6.5" rx="1.5"/><circle cx="7" cy="7.25" r="0.9" fill="currentColor" stroke="none"/><circle cx="7" cy="16.75" r="0.9" fill="currentColor" stroke="none"/></svg></div><div class="num">{{ findings.servers_and_printers | length }}</div><div class="label">Sunucu / yazıcı</div></div>
       <div class="card"><div class="icon ic-e"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div><div class="num">{{ findings.documents | length }}</div><div class="label">Belge bulundu</div></div>
       <div class="card"><div class="icon ic-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><div class="num">{{ findings.documents_with_metadata }}</div><div class="label">Metadata içeren</div></div>
+      {% if findings.content_findings %}
+      <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16.5h.01"/></svg></div><div class="num">{{ findings.content_findings | length }}</div><div class="label">İçerik taraması bulgusu</div></div>
+      {% endif %}
     </div>
 
     {% if findings.targets | length > 1 %}
@@ -265,6 +279,38 @@
       </div>
       {{ finding_table(findings.servers_and_printers, "Sunucu / yazıcı") }}
     </section>
+
+    {% if findings.content_findings %}
+    <section id="content-scan">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16.5h.01"/></svg></div>
+        <h2>İçerik Taraması (PII) — sezgisel, elle doğrulayın</h2>
+        <span class="n">{{ findings.content_findings | length }}</span>
+      </div>
+      {% set category_labels = {
+        "tc_kimlik": "TC Kimlik No", "email": "E-posta", "phone": "Telefon",
+        "iban": "IBAN", "credit_card": "Kredi Kartı No", "dob": "Doğum Tarihi (ipucu)",
+        "address": "Adres (ipucu)", "signature": "İmza ipucu",
+      } %}
+      {% for category, hits in findings.content_findings_by_category.items() | sort %}
+      <h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px;">{{ category_labels.get(category, category) }} <span class="n">{{ hits | length }}</span></h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Değer</th><th>Bağlam</th><th>Belge</th></tr></thead>
+        <tbody>
+        {% for f in hits %}
+          <tr>
+            <td class="value">{{ f.masked_value }}</td>
+            <td class="doclist">{{ f.context | truncate(90) }}</td>
+            <td class="doclist"><a href="{{ f.document_url }}" target="_blank" rel="noopener">{{ f.document_url | truncate(45) }}</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endfor %}
+    </section>
+    {% endif %}
 
     <section>
       <div class="section-head">

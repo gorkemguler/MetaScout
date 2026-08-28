@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 
 DEFAULT_FILETYPES = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"]
 
+# Opt-in document *content* scan categories (ScanConfig.scan_content) — see
+# content_scan/ package. Off by default: this reads inside each document's
+# body text looking for PII, which is a materially different (and more
+# invasive) thing than the always-on metadata-tag scan.
+DEFAULT_CONTENT_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature"]
+
 # User-Agent identifies the tool honestly rather than spoofing a browser,
 # so target site operators can see recon traffic in their logs and block it if unwanted.
 DEFAULT_USER_AGENT = "MetaScout/0.1 (+authorized-metadata-recon-tool)"
@@ -31,3 +37,5 @@ class ScanConfig:
     serper_api_key: str | None = None
     brave_api_key: str | None = None
     ddgs_backend: str = "auto"
+    scan_content: bool = False
+    content_categories: list[str] = field(default_factory=lambda: list(DEFAULT_CONTENT_CATEGORIES))

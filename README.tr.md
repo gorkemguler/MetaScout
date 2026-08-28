@@ -40,6 +40,7 @@
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
+- [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -83,6 +84,10 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **Eşzamanlı indirme**, boyut sınırı ve sha256 ile tekilleştirme
 - **Detaylı HTML rapor** (koyu tema, kategori bazlı bulgu tabloları, İngilizce
   veya Türkçe) + otomasyon için **JSON rapor**
+- **İsteğe bağlı belge *içerik* taraması** kişisel/kritik veri için — TC kimlik
+  no, e-posta/telefon, IBAN/kredi kartı no, adres/doğum tarihi ipuçları ve
+  imza ipuçları — her zaman açık olan metadata taramasının üzerine (bkz.
+  [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel))
 - Harici bağımlılık yok: tek native bileşen `exiftool`, o da tüm platformlarda mevcut
 
 ## Kurulum
@@ -416,6 +421,53 @@ metascout scan example.com --subdomains --max-subdomains 30
 `crt.sh` bazen yavaş veya rate-limit'li yanıt verebilir; bu durumda tarama
 sessizce boş subdomain listesiyle devam eder, ana domain taraması etkilenmez.
 
+## Kişisel veri içerik taraması (opsiyonel)
+
+Yukarıdakilerin hepsi belge **metadata**'sını tarar (yazar, yazılım, dosya
+yolları — exiftool'un çıkardığı etiketler). `--scan-content` daha ileri gider
+ve her indirilen belgenin gerçek **gövde metnini** okuyup kişisel/kritik veri
+arar:
+
+| Kategori | Ne tespit eder | Güvenilirlik |
+|---|---|---|
+| `tc_kimlik` | TC kimlik numaraları | Yüksek — checksum ile doğrulanır (geçersiz numaralar elenir) |
+| `email_phone` | E-postalar (regex) ve telefon numaraları ([`phonenumbers`](https://pypi.org/project/phonenumbers/) ile — Google'ın libphonenumber portu, küresel, sadece TR değil) | Telefon için yüksek (kütüphane doğrulamalı) |
+| `iban_card` | IBAN'lar (sadece Türkiye değil, tüm ISO 13616 ülkeleri) ve kart numaraları | Yüksek — mod-97 (IBAN) / Luhn (kart) checksum doğrulamalı |
+| `address_dob` | Adres benzeri ve doğum-tarihi-benzeri metin kalıpları | **Düşük** — regex sezgisi, yanlış pozitif bekleyin |
+| `signature` | Metinde "imza"/"signature"/"signed by" gibi anahtar kelimeler, **ve** PDF'in gerçek bir kriptografik imza alanı (`/Sig`) olup olmadığı | Anahtar kelime bulguları ipucudur, kanıt değil; yapısal `/Sig` kontrolü güvenilirdir |
+
+Varsayılan kapalı, isteğe bağlı ve sezgiseldir — her bulgu **elle
+doğrulanması** gereken bir şeydir, metadata bulgusu gibi kesin bir sızıntı
+değil.
+
+```bash
+pip install 'metascout[content-scan]'   # tek seferlik: pypdf + phonenumbers kurar
+metascout scan example.com --scan-content
+# ya da bir alt küme:
+metascout scan example.com --scan-content --content-categories tc_kimlik,iban_card
+```
+
+Aynı anahtar ve kategori kutucukları web arayüzünde de mevcuttur, "Belge
+içeriğinde kişisel/kritik veri taraması (PII)" altında — varsayılan
+işaretsiz. Ek paketi kurmadan etkinleştirirseniz tarama yine de çalışır ve
+hangi bağımlılığın eksik olduğunu loglar, tamamen durmaz; PDF metin
+çıkarımı ve telefon numarası tespiti özellikle `pypdf` ve `phonenumbers`
+gerektirir, geri kalanı (Office/OpenDocument metin çıkarımı, e-posta/TC
+no/IBAN/kart regex'i, imza anahtar kelimeleri) onlar olmadan da çalışır.
+
+**Raporda gizlilik:** daha kritik kategoriler tespit anında maskelenir — bir
+TC kimlik no `123******78` olarak, bir kart numarası `************1111`
+olarak, bir IBAN sadece ilk/son 4 karakteri görünecek şekilde gösterilir —
+böylece rapor ve JSON çıktısı gerçek değerlerin düz metin deposu haline
+gelmez. E-posta/telefon ve zayıf sinyalli adres/doğum tarihi ipuçları
+bulundukları haliyle gösterilir, çünkü onları göstermenin amacı zaten bu.
+
+Metin çıkarımı PDF (`pypdf` ile), `.docx`/`.xlsx`/`.pptx` ve
+`.odt`/`.ods`/`.odp` formatlarını kapsar. Eski ikili Office formatları
+(`.doc`/`.xls`/`.ppt`) desteklenmez — çok daha ağır bir bağımlılık
+(`olefile`) gerektirir, görece nadir kazanımlar için, bu yüzden atlanır
+(bu formatlarda metadata taraması normal şekilde çalışmaya devam eder).
+
 ## Arama motoru API anahtarları (opsiyonel)
 
 `google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
@@ -498,6 +550,8 @@ metascout web --help
 | `--ignore-robots` | kapalı | `robots.txt`'i yok say (yalnızca açık izniniz varsa) |
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
 | `--ddgs-backend` | `auto` | `ddgs` motoru için motor(lar), ör. `duckduckgo`, `google`, `bing` ya da virgülle ayrılmış liste |
+| `--scan-content` / `--no-scan-content` | kapalı | Belge gövde metnini de PII için tarar (bkz. [Kişisel veri içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)); `pip install 'metascout[content-scan]'` gerekir |
+| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -539,6 +593,10 @@ src/metascout/
 ├── metadata/
 │   ├── exiftool_wrapper.py exiftool subprocess sarmalayıcısı
 │   └── analyzer.py         regex + alan bazlı bulgu çıkarımı + hedef bazlı sayım
+├── content_scan/            isteğe bağlı belge *içerik* PII taraması (--scan-content)
+│   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument metin çıkarımı
+│   ├── pii_patterns.py     TC no/IBAN/kart checksum doğrulayıcıları, e-posta/telefon/doğum tarihi/adres/imza regex'i
+│   └── signature.py        PDF dijital imza (/Sig alanı) yapısal kontrolü
 ├── report/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor

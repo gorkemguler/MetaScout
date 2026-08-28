@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, request
 
-from .config import DEFAULT_FILETYPES, ScanConfig
+from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
 from .pipeline import run_scan
 from .report import render_html_report, render_json_report
@@ -45,6 +45,19 @@ _STRINGS = {
                               "<code>duckduckgo</code>, or <code>bing</code>, or a comma-separated "
                               "list to try in order.",
         "subdomains_label": "Subdomain enumeration (crt.sh)",
+        "content_scan_label": "Scan document content for personal/critical data (PII)",
+        "content_scan_hint": "Off by default. Goes beyond metadata tags and reads each document's "
+                              "actual body text for national ID numbers, emails/phones, IBANs/card "
+                              "numbers, address/DOB hints, and signature hints. Heuristic — every hit "
+                              "needs manual verification, not a confirmed leak. Requires the optional "
+                              "extra on the machine running the scan: "
+                              "<code>pip install 'metascout[content-scan]'</code>.",
+        "content_categories_label": "Categories",
+        "cat_tc_kimlik": "TR national ID no. (checksum-verified)",
+        "cat_email_phone": "Emails / phone numbers",
+        "cat_iban_card": "IBAN / credit card no. (checksum-verified)",
+        "cat_address_dob": "Address / date-of-birth hints (weak signal)",
+        "cat_signature": "Signature hints (keyword + PDF digital signature)",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
         "max_crawl_pages_label": "Max pages per host",
@@ -95,6 +108,19 @@ _STRINGS = {
                               "<code>duckduckgo</code>, <code>bing</code> gibi belirli birini ya "
                               "da sırayla denenecek virgülle ayrılmış bir liste girebilirsiniz.",
         "subdomains_label": "Subdomain keşfi (crt.sh)",
+        "content_scan_label": "Belge içeriğinde kişisel/kritik veri taraması (PII)",
+        "content_scan_hint": "Varsayılan kapalı. Metadata etiketlerinin ötesine geçip her belgenin "
+                              "gövde metnini TC kimlik no, e-posta/telefon, IBAN/kredi kartı no, "
+                              "adres/doğum tarihi ipuçları ve imza ipuçları için tarar. Sezgisel bir "
+                              "taramadır — her bulgu kesin bir sızıntı değil, elle doğrulanmalıdır. "
+                              "Taramayı çalıştıran makinede opsiyonel ek paket gerektirir: "
+                              "<code>pip install 'metascout[content-scan]'</code>.",
+        "content_categories_label": "Kategoriler",
+        "cat_tc_kimlik": "TC Kimlik No (checksum doğrulamalı)",
+        "cat_email_phone": "E-posta / telefon numaraları",
+        "cat_iban_card": "IBAN / kredi kartı no (checksum doğrulamalı)",
+        "cat_address_dob": "Adres / doğum tarihi ipuçları (zayıf sinyal)",
+        "cat_signature": "İmza ipuçları (anahtar kelime + PDF dijital imza)",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
         "max_crawl_pages_label": "Host başına azami sayfa",
@@ -240,6 +266,17 @@ _FORM_BODY = """
 
   <label><input type="checkbox" name="subdomains"> {subdomains_label}</label>
 
+  <label><input type="checkbox" name="scan_content" id="scan_content"> {content_scan_label}</label>
+  <div class="hint">{content_scan_hint}</div>
+  <label>{content_categories_label}</label>
+  <div class="checks">
+    <label><input type="checkbox" name="content_categories" value="tc_kimlik" checked> {cat_tc_kimlik}</label>
+    <label><input type="checkbox" name="content_categories" value="email_phone" checked> {cat_email_phone}</label>
+    <label><input type="checkbox" name="content_categories" value="iban_card" checked> {cat_iban_card}</label>
+    <label><input type="checkbox" name="content_categories" value="address_dob" checked> {cat_address_dob}</label>
+    <label><input type="checkbox" name="content_categories" value="signature" checked> {cat_signature}</label>
+  </div>
+
   <label>{report_lang_label}</label>
   <div class="checks">
     <label><input type="radio" name="report_lang" value="en" {report_lang_en_checked}> English</label>
@@ -310,6 +347,14 @@ def _render_form(
         ddgs_backend_hint=_t(ui_lang, "ddgs_backend_hint"),
         ddgs_backend_value=ddgs_backend_value,
         subdomains_label=_t(ui_lang, "subdomains_label"),
+        content_scan_label=_t(ui_lang, "content_scan_label"),
+        content_scan_hint=_t(ui_lang, "content_scan_hint"),
+        content_categories_label=_t(ui_lang, "content_categories_label"),
+        cat_tc_kimlik=_t(ui_lang, "cat_tc_kimlik"),
+        cat_email_phone=_t(ui_lang, "cat_email_phone"),
+        cat_iban_card=_t(ui_lang, "cat_iban_card"),
+        cat_address_dob=_t(ui_lang, "cat_address_dob"),
+        cat_signature=_t(ui_lang, "cat_signature"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
         report_lang_tr_checked="checked" if ui_lang == "tr" else "",
@@ -372,6 +417,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
         engines = request.form.getlist("engines") or ["crawl", "sitemap", "wayback", "ddgs"]
         subdomains = request.form.get("subdomains") == "on"
+        scan_content = request.form.get("scan_content") == "on"
+        content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):
             report_lang = "en"
@@ -396,6 +443,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             output_dir=run_dir,
             include_subdomains=subdomains,
             ddgs_backend=ddgs_backend,
+            scan_content=scan_content,
+            content_categories=content_categories,
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
             serper_api_key=os.environ.get("SERPER_API_KEY"),

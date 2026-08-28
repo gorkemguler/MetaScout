@@ -5,6 +5,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .config import ScanConfig
+from .content_scan import missing_dependencies, scan_document
 from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
@@ -172,4 +173,39 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     log("analyzing metadata ...")
     findings = analyze(doc_metadata, targets=cfg.targets)
 
+    if cfg.scan_content:
+        findings.content_findings = _scan_content(doc_metadata, cfg, log)
+
     return findings
+
+
+def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
+    categories = set(cfg.content_categories) or set()
+    if not categories:
+        return []
+
+    missing = missing_dependencies(categories)
+    if missing:
+        log(
+            "! content scan: missing optional dependencies (" + ", ".join(missing) + "). "
+            "Install with `pip install 'metascout[content-scan]'` for full coverage; "
+            "continuing with what's available."
+        )
+
+    log("scanning document content for personal/critical data (opt-in, heuristic) ...")
+    hits = []
+    for doc in doc_metadata:
+        if doc.error:
+            continue
+        try:
+            doc_hits = scan_document(doc.local_path, doc.filetype, categories=categories)
+        except Exception as exc:
+            log(f"! content scan failed for {doc.url}: {exc}")
+            continue
+        for h in doc_hits:
+            h.document_url = doc.url
+        hits.extend(doc_hits)
+
+    if hits:
+        log(f"  {len(hits)} potential sensitive-content hit(s) found — verify manually, this is heuristic, not confirmed")
+    return hits

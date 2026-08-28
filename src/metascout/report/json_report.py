@@ -36,6 +36,15 @@ def render_json_report(findings: ScanFindings) -> str:
             "internal_paths": _findings_dict(findings.internal_paths),
             "servers_and_printers": _findings_dict(findings.servers_and_printers),
         },
+        "content_findings": [
+            {
+                "document_url": f.document_url,
+                "category": f.category,
+                "masked_value": f.masked_value,
+                "context": f.context,
+            }
+            for f in findings.content_findings
+        ],
         "errors": findings.errors,
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)

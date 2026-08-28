@@ -40,6 +40,7 @@
 - [Wayback Machine discovery](#wayback-machine-discovery)
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
+- [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -82,6 +83,10 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **Concurrent downloads** with a size cap and sha256 deduplication
 - **Detailed HTML report** (dark theme, findings grouped by category, English
   or Turkish) plus a **JSON report** for automation
+- **Opt-in document *content* scan** for personal/critical data — national ID
+  numbers, emails/phones, IBANs/card numbers, address/DOB hints, and
+  signature hints — on top of the always-on metadata scan (see
+  [Content scanning for personal data](#content-scanning-for-personal-data-optional))
 - No exotic dependencies: the only native component is `exiftool`, available
   on every platform
 
@@ -412,6 +417,53 @@ metascout scan example.com --subdomains --max-subdomains 30
 `crt.sh` can be slow or rate-limited at times. In that case the scan silently
 continues with an empty subdomain list; the scan of the main domain is unaffected.
 
+## Content scanning for personal data (optional)
+
+Everything above scans document **metadata** (author, software, file paths —
+tags exiftool pulls out). `--scan-content` goes further and reads each
+downloaded document's actual **body text**, looking for personal/critical
+data:
+
+| Category | What it detects | Confidence |
+|---|---|---|
+| `tc_kimlik` | Turkish national ID numbers | High — checksum-validated (invalid numbers are filtered out) |
+| `email_phone` | Emails (regex) and phone numbers (via [`phonenumbers`](https://pypi.org/project/phonenumbers/), Google's libphonenumber port — international, not TR-only) | High for phones (library-validated) |
+| `iban_card` | IBANs (any ISO 13616 country, not just Turkey) and card numbers | High — mod-97 (IBAN) / Luhn (card) checksum-validated |
+| `address_dob` | Address-like and date-of-birth-like text patterns | **Low** — regex heuristics, expect false positives |
+| `signature` | "imza"/"signature"/"signed by"-style keywords in the text, **and** whether a PDF has an actual cryptographic signature field (`/Sig`) | Keyword hits are a hint, not proof; the structural `/Sig` check is reliable |
+
+It's off by default, opt-in, and heuristic — every hit is something to
+**verify manually**, not a confirmed leak the way a metadata finding is.
+
+```bash
+pip install 'metascout[content-scan]'   # one-time: pulls in pypdf + phonenumbers
+metascout scan example.com --scan-content
+# or a subset:
+metascout scan example.com --scan-content --content-categories tc_kimlik,iban_card
+```
+
+The same toggle and category checkboxes are available in the web UI, under
+"Scan document content for personal/critical data (PII)" — unchecked by
+default. If you enable it without installing the extra, the scan still runs
+and logs which dependency is missing instead of failing outright; PDF text
+extraction and phone-number detection specifically need `pypdf` and
+`phonenumbers` respectively, everything else (Office/OpenDocument text
+extraction, email/TC-no/IBAN/card regex, signature keywords) works without
+them.
+
+**Privacy in the report itself:** the more sensitive categories are masked
+at detection time — a TC no. shows as `123******78`, a card number as
+`************1111`, an IBAN keeps only its first/last 4 characters — so the
+report and its JSON export never become a plaintext store of the actual
+values. Emails/phones and the weak address/DOB hints are shown as found,
+since that's already the point of surfacing them.
+
+Text extraction covers PDF (via `pypdf`), `.docx`/`.xlsx`/`.pptx`, and
+`.odt`/`.ods`/`.odp`. Legacy binary Office formats (`.doc`/`.xls`/`.ppt`)
+aren't supported — they'd need a much heavier dependency (`olefile`) for
+comparatively rare wins, so they're skipped (metadata scanning still works
+on them as normal).
+
 ## Search engine API keys (optional)
 
 The `google`, `serper`, and `brave` engines run classic FOCA-style
@@ -493,6 +545,8 @@ metascout web --help
 | `--ignore-robots` | off | Ignore `robots.txt` (only with explicit authorization) |
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Can also be set via env var or `.env` |
 | `--ddgs-backend` | `auto` | Backend(s) for the `ddgs` engine, e.g. `duckduckgo`, `google`, `bing`, or a comma-separated list |
+| `--scan-content` / `--no-scan-content` | off | Also scan document body text for PII (see [Content scanning](#content-scanning-for-personal-data-optional)); needs `pip install 'metascout[content-scan]'` |
+| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Comma-separated subset, only used with `--scan-content` |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -534,6 +588,10 @@ src/metascout/
 ├── metadata/
 │   ├── exiftool_wrapper.py exiftool subprocess wrapper
 │   └── analyzer.py         regex + field-based extraction, per-target counts
+├── content_scan/            opt-in document *content* PII scan (--scan-content)
+│   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument text extraction
+│   ├── pii_patterns.py     TC no./IBAN/card checksum validators, email/phone/DOB/address/signature regex
+│   └── signature.py        PDF digital-signature (/Sig field) structural check
 ├── report/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report

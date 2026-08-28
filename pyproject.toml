@@ -24,6 +24,17 @@ dependencies = [
     "ddgs>=9.0",
 ]
 
+[project.optional-dependencies]
+# Opt-in document *content* scanning (--scan-content): looks for PII
+# (national ID numbers, emails, phones, IBANs, card numbers, address/DOB
+# hints) and signature hints inside downloaded PDFs/Office files, on top of
+# the always-on metadata scan. Kept out of the core install since most
+# scans don't need it and pypdf/phonenumbers add real weight.
+content-scan = [
+    "pypdf>=4.0",
+    "phonenumbers>=8.13",
+]
+
 [project.scripts]
 metascout = "metascout.cli:main"
 

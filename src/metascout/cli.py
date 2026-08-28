@@ -9,7 +9,7 @@ from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from .config import DEFAULT_FILETYPES, ScanConfig
+from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
 from .pipeline import run_scan
 from .report import render_html_report, render_json_report
 
@@ -58,6 +58,14 @@ def _print_summary(findings) -> None:
         for t, count in findings.documents_by_target.items():
             by_target.add_row(t, str(count))
         console.print(by_target)
+
+    if findings.content_findings:
+        content_table = Table(title="Content scan hits (heuristic — verify manually)")
+        content_table.add_column("Category")
+        content_table.add_column("Hits", justify="right")
+        for category, hits in sorted(findings.content_findings_by_category.items()):
+            content_table.add_row(category, str(len(hits)))
+        console.print(content_table)
 
 
 def _default_engines() -> str:
@@ -141,12 +149,23 @@ def main() -> None:
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)
 @click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Language for the HTML report.")
+@click.option(
+    "--scan-content/--no-scan-content", default=False,
+    help="Also scan each downloaded document's body text (not just metadata) for personal/critical data: "
+    "national ID numbers, emails/phones, IBANs/card numbers, address/DOB hints, and signature hints. "
+    "Off by default — heuristic, and requires the optional extra: pip install 'metascout[content-scan]'.",
+)
+@click.option(
+    "--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True,
+    help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature. Only used with --scan-content.",
+)
 def scan(
     targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
+    scan_content: bool, content_categories: str,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -189,6 +208,8 @@ def scan(
         google_cse_id=google_cse_id,
         serper_api_key=serper_api_key,
         brave_api_key=brave_api_key,
+        scan_content=scan_content,
+        content_categories=[c.strip().lower() for c in content_categories.split(",") if c.strip()],
     )
 
     _print_banner()
