@@ -3,6 +3,7 @@ from __future__ import annotations
 from . import pii_patterns as pii
 from .signature import PYPDF_AVAILABLE, has_pdf_digital_signature
 from .text_extract import extract_text
+from .visual_signature import SIGNATURE_DETECT_AVAILABLE, detect_visual_signature
 from ..models import ContentFinding
 
 PHONENUMBERS_AVAILABLE = pii.PHONENUMBERS_AVAILABLE
@@ -16,7 +17,7 @@ ALL_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signa
 _CONTEXT_RADIUS = 30
 
 
-def missing_dependencies(categories: set[str]) -> list[str]:
+def missing_dependencies(categories: set[str], *, visual_signature: bool = False) -> list[str]:
     """Optional dependencies not installed that would improve coverage for
     the requested categories — used to log one clear warning instead of
     silently under-reporting."""
@@ -25,6 +26,11 @@ def missing_dependencies(categories: set[str]) -> list[str]:
         missing.append("pypdf (PDF text extraction + PDF digital-signature check)")
     if "email_phone" in categories and not PHONENUMBERS_AVAILABLE:
         missing.append("phonenumbers (phone number detection)")
+    if visual_signature and not SIGNATURE_DETECT_AVAILABLE:
+        missing.append(
+            "signature-detect (visual signature detection — also needs ImageMagick "
+            "and Ghostscript installed system-wide, not just the pip package)"
+        )
     return missing
 
 
@@ -98,4 +104,5 @@ def scan_document(local_path: str, filetype: str, *, categories: set[str]) -> li
 __all__ = [
     "scan_document", "missing_dependencies", "ALL_CATEGORIES",
     "PYPDF_AVAILABLE", "PHONENUMBERS_AVAILABLE",
+    "SIGNATURE_DETECT_AVAILABLE", "detect_visual_signature",
 ]

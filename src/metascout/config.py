@@ -39,3 +39,8 @@ class ScanConfig:
     ddgs_backend: str = "auto"
     scan_content: bool = False
     content_categories: list[str] = field(default_factory=lambda: list(DEFAULT_CONTENT_CATEGORIES))
+    # Double opt-in on purpose: only takes effect when scan_content is also
+    # on, and even then only if the (heavy, unmaintained-upstream)
+    # signature-detect package + ImageMagick/Ghostscript are installed.
+    # See content_scan/visual_signature.py.
+    visual_signature: bool = False

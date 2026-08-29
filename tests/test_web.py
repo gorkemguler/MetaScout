@@ -90,3 +90,29 @@ def test_scan_content_defaults_off_and_wires_categories_when_enabled(tmp_path):
         })
     assert captured_cfg["scan_content"] is True
     assert captured_cfg["content_categories"] == ["tc_kimlik", "signature"]
+
+
+def test_visual_signature_defaults_off_and_wires_when_enabled(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+
+    captured_cfg = {}
+
+    def fake_run_scan(cfg, log=None):
+        captured_cfg["visual_signature"] = cfg.visual_signature
+        from metascout.metadata.analyzer import analyze
+        return analyze([], targets=cfg.targets)
+
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={
+            "targets": "example.com", "manual_urls": "", "engines": ["crawl"],
+            "scan_content": "on",
+        })
+    assert captured_cfg["visual_signature"] is False
+
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={
+            "targets": "example.com", "manual_urls": "", "engines": ["crawl"],
+            "scan_content": "on", "visual_signature": "on",
+        })
+    assert captured_cfg["visual_signature"] is True

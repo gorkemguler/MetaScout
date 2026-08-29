@@ -41,6 +41,7 @@
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
 - [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
+  - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--ayrıca-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -468,6 +469,56 @@ Metin çıkarımı PDF (`pypdf` ile), `.docx`/`.xlsx`/`.pptx` ve
 (`olefile`) gerektirir, görece nadir kazanımlar için, bu yüzden atlanır
 (bu formatlarda metadata taraması normal şekilde çalışmaya devam eder).
 
+### Görsel (ıslak) imza tespiti — ayrıca opsiyonel
+
+Yukarıdaki her şey, `signature` kategorisi dahil, sadece belgenin **metnini**
+görür — gövdede "signed by" gibi bir kelime, ya da PDF'in `/Sig` alanı.
+Hiçbiri, **hiç metin katmanı olmayan, sadece el yazısı imza içeren taranmış
+bir sayfayı** yakalayamaz. `--visual-signature` bunu ekliyor: her sayfayı
+görüntüye çevirip [`signature-detect`](https://github.com/EnzoSeason/signature_detection)
+sezgisel görüntü işleme hattını (parlaklık eşikleme → bağlı bölge çıkarımı →
+aspect-ratio/piksel-yoğunluk değerlendirmesi) çalıştırarak el yazısı imza
+şeklindeki mürekkep lekelerini işaretliyor.
+
+Bu, bilerek **iki bağımsız seviyede** opsiyonel yapıldı ve sadece
+`--scan-content` ile birlikte etkili oluyor:
+
+```bash
+pip install 'metascout[visual-signature]'
+metascout scan example.com --scan-content --visual-signature
+```
+
+1. Sadece `pip install 'metascout[visual-signature]'` yapmak **hiçbir şey
+   değiştirmez** — gerçekten çalıştırmak için yine de komutta
+   `--visual-signature` (ya da web arayüzünde ilgili kutucuk) gerekir.
+2. Projenin geri kalanından gerçekten daha ağır bir bağımlılık. pip paketinin
+   üstüne, **sistemde kurulu ImageMagick ve Ghostscript** gerektiriyor
+   (Wand, ImageMagick'i çağırıyor, o da PDF rasterizasyonunu Ghostscript'e
+   devrediyor) — canlı doğrulandı: Ghostscript olmadan doğrudan
+   `DelegateError` ile başarısız oluyor. Normal kuruluma ek olarak ~150–250MB
+   native kütüphane bekleyin.
+
+Açmadan önce bilmekte fayda var:
+
+- Üst kaynak proje **Ekim 2022'den beri bakımsız**, ve şu anki
+  scikit-image'da zaten bir `FutureWarning` tetikliyor (burada bastırıldı,
+  ama algoritmanın bağımlılıklarının eskidiğine dair gerçek bir sinyal).
+- Tespit sezgisel ve parametre-hassas: varsayılan aspect-ratio penceresi çok
+  geniş/yassı imza şekillerini reddediyor, yani gerçek imzalar tarama
+  kalitesine ve imza tarzına göre kaçırılabilir — canlı sentetik test
+  görüntüleriyle doğrulandı (kompakt, imza-şeklinde bir mürekkep izi doğru
+  işaretlendi; aynı iz daha geniş gerilince işaretlenmedi).
+- Kontrol hiç çalışamazsa (bağımlılık eksik, Ghostscript eksik, bozuk dosya)
+  bu "doğrulanamadı" olarak ele alınır, "imza yok" olarak değil — o sayfa
+  için rapora hiçbir şey eklenmez, yanlış-negatif bir bulgu olarak
+  raporlanmaz.
+- ImageMagick/Ghostscript'i `exiftool` ile aynı şekilde kurun:
+  `brew install imagemagick ghostscript` (macOS),
+  `apt install imagemagick ghostscript` (Debian/Ubuntu), ya da
+  [imagemagick.org](https://imagemagick.org/script/download.php#windows) ve
+  [ghostscript.com](https://www.ghostscript.com/releases/gsdnld.html)
+  adreslerindeki resmi Windows kurulum dosyaları.
+
 ## Arama motoru API anahtarları (opsiyonel)
 
 `google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
@@ -552,6 +603,7 @@ metascout web --help
 | `--ddgs-backend` | `auto` | `ddgs` motoru için motor(lar), ör. `duckduckgo`, `google`, `bing` ya da virgülle ayrılmış liste |
 | `--scan-content` / `--no-scan-content` | kapalı | Belge gövde metnini de PII için tarar (bkz. [Kişisel veri içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)); `pip install 'metascout[content-scan]'` gerekir |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
+| `--visual-signature` / `--no-visual-signature` | kapalı | Görsel (görüntü tabanlı) imza tespiti; `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript ve `--scan-content` gerektirir |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -596,7 +648,8 @@ src/metascout/
 ├── content_scan/            isteğe bağlı belge *içerik* PII taraması (--scan-content)
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument metin çıkarımı
 │   ├── pii_patterns.py     TC no/IBAN/kart checksum doğrulayıcıları, e-posta/telefon/doğum tarihi/adres/imza regex'i
-│   └── signature.py        PDF dijital imza (/Sig alanı) yapısal kontrolü
+│   ├── signature.py        PDF dijital imza (/Sig alanı) yapısal kontrolü
+│   └── visual_signature.py  opsiyonel görüntü-tabanlı imza tespiti (--visual-signature)
 ├── report/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor

@@ -35,6 +35,17 @@ content-scan = [
     "phonenumbers>=8.13",
 ]
 
+# Opt-in *visual* signature detection (--scan-content --visual-signature):
+# looks for handwritten-signature-shaped ink blobs in rasterized page images
+# (catches a wet signature with no text layer at all), via the unmaintained-
+# since-2022 `signature-detect` package. Kept as its own extra, separate
+# from content-scan, since it also needs ImageMagick *and* Ghostscript
+# installed system-wide (not just this pip package) — see
+# content_scan/visual_signature.py and the README for details.
+visual-signature = [
+    "signature-detect>=0.1.4",
+]
+
 [project.scripts]
 metascout = "metascout.cli:main"
 

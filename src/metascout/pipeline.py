@@ -5,12 +5,12 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .config import ScanConfig
-from .content_scan import missing_dependencies, scan_document
+from .content_scan import detect_visual_signature, missing_dependencies, scan_document
 from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
-from .models import DiscoveredDocument, DiscoverySource, ScanFindings
+from .models import ContentFinding, DiscoveredDocument, DiscoverySource, ScanFindings
 
 LogFn = Callable[[str], None]
 
@@ -181,15 +181,16 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
 
 def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
     categories = set(cfg.content_categories) or set()
-    if not categories:
+    if not categories and not cfg.visual_signature:
         return []
 
-    missing = missing_dependencies(categories)
+    missing = missing_dependencies(categories, visual_signature=cfg.visual_signature)
     if missing:
         log(
             "! content scan: missing optional dependencies (" + ", ".join(missing) + "). "
-            "Install with `pip install 'metascout[content-scan]'` for full coverage; "
-            "continuing with what's available."
+            "Install with `pip install 'metascout[content-scan]'` (and, for visual "
+            "signature detection, `pip install 'metascout[visual-signature]'`) for "
+            "full coverage; continuing with what's available."
         )
 
     log("scanning document content for personal/critical data (opt-in, heuristic) ...")
@@ -198,13 +199,26 @@ def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
         if doc.error:
             continue
         try:
-            doc_hits = scan_document(doc.local_path, doc.filetype, categories=categories)
+            doc_hits = scan_document(doc.local_path, doc.filetype, categories=categories) if categories else []
         except Exception as exc:
             log(f"! content scan failed for {doc.url}: {exc}")
-            continue
+            doc_hits = []
         for h in doc_hits:
             h.document_url = doc.url
         hits.extend(doc_hits)
+
+        if cfg.visual_signature:
+            try:
+                visually_signed = detect_visual_signature(doc.local_path, doc.filetype)
+            except Exception as exc:
+                log(f"! visual signature check failed for {doc.url}: {exc}")
+                visually_signed = None
+            if visually_signed:
+                hits.append(ContentFinding(
+                    document_url=doc.url, category="signature",
+                    masked_value="visual: signature-shaped ink detected in page image "
+                                 "(heuristic image analysis — verify manually)",
+                ))
 
     if hits:
         log(f"  {len(hits)} potential sensitive-content hit(s) found — verify manually, this is heuristic, not confirmed")

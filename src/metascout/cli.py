@@ -159,13 +159,20 @@ def main() -> None:
     "--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True,
     help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature. Only used with --scan-content.",
 )
+@click.option(
+    "--visual-signature/--no-visual-signature", default=False,
+    help="Also look for handwritten-signature-shaped ink in rasterized page images (catches a wet "
+    "signature with no text layer at all). Only takes effect together with --scan-content. Off by "
+    "default: heuristic, unmaintained upstream, and needs pip install 'metascout[visual-signature]' "
+    "PLUS ImageMagick and Ghostscript installed system-wide.",
+)
 def scan(
     targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
     output_dir: str, ignore_robots: bool, subdomains: bool, max_subdomains: int,
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
-    scan_content: bool, content_categories: str,
+    scan_content: bool, content_categories: str, visual_signature: bool,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -210,6 +217,7 @@ def scan(
         brave_api_key=brave_api_key,
         scan_content=scan_content,
         content_categories=[c.strip().lower() for c in content_categories.split(",") if c.strip()],
+        visual_signature=visual_signature,
     )
 
     _print_banner()

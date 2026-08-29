@@ -58,6 +58,14 @@ _STRINGS = {
         "cat_iban_card": "IBAN / credit card no. (checksum-verified)",
         "cat_address_dob": "Address / date-of-birth hints (weak signal)",
         "cat_signature": "Signature hints (keyword + PDF digital signature)",
+        "visual_signature_label": "Also try visual (wet) signature detection",
+        "visual_signature_hint": "Additional, separately opt-in check: looks for a handwritten-"
+                                  "signature-shaped ink blob in the actual page image, catching a "
+                                  "scanned signature with no text layer or /Sig field at all. Off by "
+                                  "default — heuristic, upstream unmaintained since 2022, and needs "
+                                  "<code>pip install 'metascout[visual-signature]'</code> "
+                                  "<strong>plus ImageMagick and Ghostscript installed system-wide</strong> "
+                                  "(not just the pip package). Only runs if content scanning above is on.",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
         "max_crawl_pages_label": "Max pages per host",
@@ -121,6 +129,15 @@ _STRINGS = {
         "cat_iban_card": "IBAN / kredi kartı no (checksum doğrulamalı)",
         "cat_address_dob": "Adres / doğum tarihi ipuçları (zayıf sinyal)",
         "cat_signature": "İmza ipuçları (anahtar kelime + PDF dijital imza)",
+        "visual_signature_label": "Görsel (ıslak) imza tespitini de dene",
+        "visual_signature_hint": "Ayrıca, kendi başına opsiyonel bir kontrol: sayfa görüntüsünde el yazısı "
+                                  "imza şeklinde bir mürekkep lekesi arar, hiç metin katmanı ya da "
+                                  "/Sig alanı olmayan taranmış bir imzayı bile yakalar. Varsayılan "
+                                  "kapalı — sezgiseldir, üst kaynak proje 2022'den beri bakımsızdır, "
+                                  "ve <code>pip install 'metascout[visual-signature]'</code> "
+                                  "<strong>üstüne sistemde kurulu ImageMagick ve Ghostscript</strong> "
+                                  "gerektirir (sadece pip paketi yetmez). Sadece yukarıdaki içerik "
+                                  "taraması açıksa çalışır.",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
         "max_crawl_pages_label": "Host başına azami sayfa",
@@ -277,6 +294,9 @@ _FORM_BODY = """
     <label><input type="checkbox" name="content_categories" value="signature" checked> {cat_signature}</label>
   </div>
 
+  <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
+  <div class="hint">{visual_signature_hint}</div>
+
   <label>{report_lang_label}</label>
   <div class="checks">
     <label><input type="radio" name="report_lang" value="en" {report_lang_en_checked}> English</label>
@@ -355,6 +375,8 @@ def _render_form(
         cat_iban_card=_t(ui_lang, "cat_iban_card"),
         cat_address_dob=_t(ui_lang, "cat_address_dob"),
         cat_signature=_t(ui_lang, "cat_signature"),
+        visual_signature_label=_t(ui_lang, "visual_signature_label"),
+        visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
         report_lang_tr_checked="checked" if ui_lang == "tr" else "",
@@ -419,6 +441,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         subdomains = request.form.get("subdomains") == "on"
         scan_content = request.form.get("scan_content") == "on"
         content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
+        visual_signature = request.form.get("visual_signature") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):
             report_lang = "en"
@@ -445,6 +468,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             ddgs_backend=ddgs_backend,
             scan_content=scan_content,
             content_categories=content_categories,
+            visual_signature=visual_signature,
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
             serper_api_key=os.environ.get("SERPER_API_KEY"),

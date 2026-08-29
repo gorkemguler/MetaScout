@@ -117,3 +117,74 @@ def test_run_scan_skips_content_scan_for_documents_with_download_errors():
         run_scan(cfg)
 
     mock_scan_document.assert_not_called()
+
+
+def test_run_scan_does_not_call_visual_signature_when_flag_is_off():
+    cfg = _cfg(manual_urls=["https://example.com/a.pdf"], scan_content=True, visual_signature=False)
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]), \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document", return_value=[]), \
+         patch("metascout.pipeline.detect_visual_signature") as mock_detect:
+        run_scan(cfg)
+
+    mock_detect.assert_not_called()
+
+
+def test_run_scan_calls_visual_signature_when_flag_is_on_and_appends_finding():
+    cfg = _cfg(
+        manual_urls=["https://example.com/a.pdf"],
+        scan_content=True, content_categories=[], visual_signature=True,
+    )
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]), \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document") as mock_scan_document, \
+         patch("metascout.pipeline.detect_visual_signature", return_value=True) as mock_detect:
+        findings = run_scan(cfg)
+
+    mock_scan_document.assert_not_called()  # no text categories selected
+    mock_detect.assert_called_once_with("/tmp/a.pdf", "pdf")
+    assert len(findings.content_findings) == 1
+    assert findings.content_findings[0].category == "signature"
+    assert findings.content_findings[0].document_url == "https://example.com/a.pdf"
+
+
+def test_run_scan_visual_signature_false_result_adds_no_finding():
+    cfg = _cfg(
+        manual_urls=["https://example.com/a.pdf"],
+        scan_content=True, content_categories=[], visual_signature=True,
+    )
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]), \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.detect_visual_signature", return_value=False):
+        findings = run_scan(cfg)
+
+    assert findings.content_findings == []
+
+
+def test_run_scan_visual_signature_disabled_when_content_categories_empty_and_flag_off():
+    cfg = _cfg(manual_urls=["https://example.com/a.pdf"], scan_content=True, content_categories=[], visual_signature=False)
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]), \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document") as mock_scan_document, \
+         patch("metascout.pipeline.detect_visual_signature") as mock_detect:
+        findings = run_scan(cfg)
+
+    mock_scan_document.assert_not_called()
+    mock_detect.assert_not_called()
+    assert findings.content_findings == []

@@ -41,6 +41,7 @@
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
+  - [Visual (wet) signature detection](#visual-wet-signature-detection--separately-opt-in)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -464,6 +465,55 @@ aren't supported — they'd need a much heavier dependency (`olefile`) for
 comparatively rare wins, so they're skipped (metadata scanning still works
 on them as normal).
 
+### Visual (wet) signature detection — separately opt-in
+
+Everything above, including the `signature` category, only sees a document's
+*text* — a keyword like "signed by" in the body, or a PDF's `/Sig` field.
+None of that catches a **scanned page with a handwritten signature and no
+text layer at all**. `--visual-signature` adds that: it rasterizes each
+page and runs the [`signature-detect`](https://github.com/EnzoSeason/signature_detection)
+heuristic image pipeline (brightness threshold → connected-component
+extraction → aspect-ratio/pixel-density judgement) to flag ink blobs shaped
+like a handwritten signature.
+
+This is opt-in on **two independent levels** by design, and only takes
+effect together with `--scan-content`:
+
+```bash
+pip install 'metascout[visual-signature]'
+metascout scan example.com --scan-content --visual-signature
+```
+
+1. Installing `pip install 'metascout[visual-signature]'` alone does
+   **nothing** — you still need `--visual-signature` on the command (or the
+   checkbox in the web UI) to actually run it.
+2. It's a genuinely heavier dependency than the rest of this project. On top
+   of the pip package, it needs **ImageMagick and Ghostscript installed
+   system-wide** (Wand shells out to ImageMagick, which delegates PDF
+   rasterization to Ghostscript) — confirmed live: without Ghostscript, it
+   fails outright with a `DelegateError`. Expect ~150–250MB of native
+   libraries on top of the usual install.
+
+Other things worth knowing before turning this on:
+
+- The upstream project has been **unmaintained since October 2022** and
+  already triggers a `FutureWarning` against current scikit-image (suppressed
+  here, but it's a real signal the algorithm's dependencies are aging).
+- Detection is heuristic and parameter-sensitive: the default aspect-ratio
+  window rejects very wide/flat signature shapes, so real signatures can be
+  missed depending on scan quality and signing style — verified live with
+  synthetic test images (a compact signature-shaped stroke was correctly
+  flagged; the same stroke stretched wider was not).
+- If the check can't run at all (dependency missing, Ghostscript missing, a
+  corrupt file) it's treated as "couldn't confirm," not "no signature" —
+  nothing gets added to the report for that page rather than a false negative
+  being reported as a hit.
+- Install ImageMagick/Ghostscript the same way as `exiftool`:
+  `brew install imagemagick ghostscript` (macOS),
+  `apt install imagemagick ghostscript` (Debian/Ubuntu), or the official
+  Windows installers from [imagemagick.org](https://imagemagick.org/script/download.php#windows)
+  and [ghostscript.com](https://www.ghostscript.com/releases/gsdnld.html).
+
 ## Search engine API keys (optional)
 
 The `google`, `serper`, and `brave` engines run classic FOCA-style
@@ -547,6 +597,7 @@ metascout web --help
 | `--ddgs-backend` | `auto` | Backend(s) for the `ddgs` engine, e.g. `duckduckgo`, `google`, `bing`, or a comma-separated list |
 | `--scan-content` / `--no-scan-content` | off | Also scan document body text for PII (see [Content scanning](#content-scanning-for-personal-data-optional)); needs `pip install 'metascout[content-scan]'` |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Comma-separated subset, only used with `--scan-content` |
+| `--visual-signature` / `--no-visual-signature` | off | Visual (image-based) signature detection; needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript, and `--scan-content` |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -591,7 +642,8 @@ src/metascout/
 ├── content_scan/            opt-in document *content* PII scan (--scan-content)
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument text extraction
 │   ├── pii_patterns.py     TC no./IBAN/card checksum validators, email/phone/DOB/address/signature regex
-│   └── signature.py        PDF digital-signature (/Sig field) structural check
+│   ├── signature.py        PDF digital-signature (/Sig field) structural check
+│   └── visual_signature.py  opt-in image-based signature detection (--visual-signature)
 ├── report/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
