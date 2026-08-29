@@ -58,14 +58,19 @@ _STRINGS = {
         "cat_iban_card": "IBAN / credit card no. (checksum-verified)",
         "cat_address_dob": "Address / date-of-birth hints (weak signal)",
         "cat_signature": "Signature hints (keyword + PDF digital signature)",
-        "visual_signature_label": "Also try visual (wet) signature detection",
-        "visual_signature_hint": "Additional, separately opt-in check: looks for a handwritten-"
-                                  "signature-shaped ink blob in the actual page image, catching a "
-                                  "scanned signature with no text layer or /Sig field at all. Off by "
-                                  "default — heuristic, upstream unmaintained since 2022, and needs "
+        "visual_signature_label": "EXPERIMENTAL: also try visual (wet) signature detection",
+        "visual_signature_hint": "Independent of content scanning above — works with or without it. "
+                                  "Looks for a handwritten-signature-shaped ink blob in the actual page "
+                                  "image, catching a scanned signature with no text layer or /Sig field "
+                                  "at all. Off by default — heuristic with a real false-positive rate "
+                                  "(confirmed live: both correct detections and false positives on real "
+                                  "insurance-form PDFs), upstream unmaintained since 2022, often takes "
+                                  "well over a minute per document, and needs "
                                   "<code>pip install 'metascout[visual-signature]'</code> "
                                   "<strong>plus ImageMagick and Ghostscript installed system-wide</strong> "
-                                  "(not just the pip package). Only runs if content scanning above is on.",
+                                  "(not just the pip package). For a large batch, running "
+                                  "<code>metascout visual-signature-scan</code> from a terminal against "
+                                  "this scan's output afterward is more practical than waiting here.",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
         "max_crawl_pages_label": "Max pages per host",
@@ -129,15 +134,19 @@ _STRINGS = {
         "cat_iban_card": "IBAN / kredi kartı no (checksum doğrulamalı)",
         "cat_address_dob": "Adres / doğum tarihi ipuçları (zayıf sinyal)",
         "cat_signature": "İmza ipuçları (anahtar kelime + PDF dijital imza)",
-        "visual_signature_label": "Görsel (ıslak) imza tespitini de dene",
-        "visual_signature_hint": "Ayrıca, kendi başına opsiyonel bir kontrol: sayfa görüntüsünde el yazısı "
-                                  "imza şeklinde bir mürekkep lekesi arar, hiç metin katmanı ya da "
-                                  "/Sig alanı olmayan taranmış bir imzayı bile yakalar. Varsayılan "
-                                  "kapalı — sezgiseldir, üst kaynak proje 2022'den beri bakımsızdır, "
-                                  "ve <code>pip install 'metascout[visual-signature]'</code> "
+        "visual_signature_label": "DENEYSEL: görsel (ıslak) imza tespitini de dene",
+        "visual_signature_hint": "Yukarıdaki içerik taramasından bağımsız — onunla ya da onsuz çalışır. "
+                                  "Sayfa görüntüsünde el yazısı imza şeklinde bir mürekkep lekesi arar, "
+                                  "hiç metin katmanı ya da /Sig alanı olmayan taranmış bir imzayı bile "
+                                  "yakalar. Varsayılan kapalı — gerçek bir yanlış-pozitif oranı var "
+                                  "(canlı doğrulandı: gerçek sigorta formu PDF'lerinde hem doğru tespit "
+                                  "hem yanlış pozitif çıktı), üst kaynak proje 2022'den beri bakımsız, "
+                                  "genelde belge başına bir dakikadan fazla sürüyor, ve "
+                                  "<code>pip install 'metascout[visual-signature]'</code> "
                                   "<strong>üstüne sistemde kurulu ImageMagick ve Ghostscript</strong> "
-                                  "gerektirir (sadece pip paketi yetmez). Sadece yukarıdaki içerik "
-                                  "taraması açıksa çalışır.",
+                                  "gerektirir (sadece pip paketi yetmez). Büyük bir belge grubu için, "
+                                  "burada beklemek yerine bu taramanın sonuçları üzerinde terminalden "
+                                  "<code>metascout visual-signature-scan</code> çalıştırmak daha pratik.",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
         "max_crawl_pages_label": "Host başına azami sayfa",

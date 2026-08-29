@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 from urllib.parse import urlparse
@@ -161,10 +162,12 @@ def main() -> None:
 )
 @click.option(
     "--visual-signature/--no-visual-signature", default=False,
-    help="Also look for handwritten-signature-shaped ink in rasterized page images (catches a wet "
-    "signature with no text layer at all). Only takes effect together with --scan-content. Off by "
-    "default: heuristic, unmaintained upstream, and needs pip install 'metascout[visual-signature]' "
-    "PLUS ImageMagick and Ghostscript installed system-wide.",
+    help="EXPERIMENTAL, independent of --scan-content: also look for handwritten-signature-shaped "
+    "ink in rasterized page images (catches a wet signature with no text layer at all). Off by "
+    "default — heuristic with a real false-positive rate, unmaintained upstream, slow (well over a "
+    "minute per document on some real PDFs), and needs pip install 'metascout[visual-signature]' "
+    "PLUS ImageMagick and Ghostscript installed system-wide. To run this later instead of inline, "
+    "see `metascout visual-signature-scan`.",
 )
 def scan(
     targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
@@ -248,6 +251,81 @@ def scan(
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(render_html_report(findings, lang=report_lang))
         console.print(f"[green]HTML report:[/green] {html_path}")
+
+
+@main.command("visual-signature-scan")
+@click.argument("report_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--json-out", type=click.Path(), default=None, help="Where to write the results JSON. Defaults to REPORT_DIR/visual_signature_report.json.")
+def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
+    """Run the slow, EXPERIMENTAL, image-based (wet) signature check against
+    documents from a previous `metascout scan` run, without re-discovering
+    or re-downloading anything.
+
+    REPORT_DIR is a scan's output directory (the one containing
+    report.json) — e.g. `./metascout_output` or a specific
+    `web-YYYYMMDD-HHMMSS` run folder from the web UI.
+
+    This is the same check `metascout scan --visual-signature` runs inline,
+    split out on its own because it's genuinely slow (live-tested: anywhere
+    from under a second to over two minutes per document, dominated by
+    Ghostscript PDF rasterization) — most people won't want that blocking a
+    regular scan. Run a normal scan first, then come back and run this
+    separately, later, only on the documents you actually want checked.
+
+    Requires: `pip install 'metascout[visual-signature]'` plus ImageMagick
+    and Ghostscript installed system-wide (not just the pip package).
+    """
+    from .content_scan import missing_dependencies
+    from .models import DocumentMetadata
+    from .pipeline import scan_visual_signatures
+
+    report_path = os.path.join(report_dir, "report.json")
+    if not os.path.isfile(report_path):
+        raise click.UsageError(f"No report.json found in {report_dir!r} — point this at a `metascout scan` output directory.")
+
+    with open(report_path, encoding="utf-8") as fh:
+        report = json.load(fh)
+
+    doc_metadata = [
+        DocumentMetadata(url=d["url"], local_path=d.get("local_path") or "", filetype=d["filetype"], error=d.get("error"))
+        for d in report.get("documents", [])
+    ]
+    doc_metadata = [d for d in doc_metadata if not d.error and d.local_path and os.path.isfile(d.local_path)]
+
+    _print_banner()
+    console.print("[bold yellow]EXPERIMENTAL:[/bold yellow] heuristic image analysis with a real false-positive rate — verify every hit manually.")
+    console.print("[dim]This can take from under a second to well over a minute PER document.[/dim]\n")
+
+    if missing_dependencies(set(), visual_signature=True):
+        console.print(
+            "[bold red]signature-detect is not installed[/bold red] — run "
+            "[bold]pip install 'metascout[visual-signature]'[/bold] (plus ImageMagick and Ghostscript) first."
+        )
+        sys.exit(1)
+
+    if not doc_metadata:
+        console.print("[yellow]No downloaded, error-free documents with a local file found in this report. Nothing to scan.[/yellow]")
+        sys.exit(0)
+
+    console.print(f"[bold]{len(doc_metadata)}[/bold] document(s) to check ...\n")
+    hits = scan_visual_signatures(doc_metadata, log=_cli_log)
+
+    table = Table(title="Visual signature scan results (experimental)")
+    table.add_column("Document")
+    table.add_column("Visual signature?", justify="center")
+    hit_urls = {h.document_url for h in hits}
+    for doc in doc_metadata:
+        table.add_row(doc.url, "[bold red]yes[/bold red]" if doc.url in hit_urls else "no")
+    console.print(table)
+
+    out_path = json_out or os.path.join(report_dir, "visual_signature_report.json")
+    payload = [
+        {"url": doc.url, "filetype": doc.filetype, "visual_signature_detected": doc.url in hit_urls}
+        for doc in doc_metadata
+    ]
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+    console.print(f"\n[green]Results:[/green] {out_path}")
 
 
 @main.command()

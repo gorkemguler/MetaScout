@@ -41,7 +41,7 @@
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
-  - [Visual (wet) signature detection](#visual-wet-signature-detection--separately-opt-in)
+  - [Visual (wet) signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -465,7 +465,7 @@ aren't supported — they'd need a much heavier dependency (`olefile`) for
 comparatively rare wins, so they're skipped (metadata scanning still works
 on them as normal).
 
-### Visual (wet) signature detection — separately opt-in
+### Visual (wet) signature detection — EXPERIMENTAL, separately opt-in
 
 Everything above, including the `signature` category, only sees a document's
 *text* — a keyword like "signed by" in the body, or a PDF's `/Sig` field.
@@ -476,12 +476,13 @@ heuristic image pipeline (brightness threshold → connected-component
 extraction → aspect-ratio/pixel-density judgement) to flag ink blobs shaped
 like a handwritten signature.
 
-This is opt-in on **two independent levels** by design, and only takes
-effect together with `--scan-content`:
+This is opt-in on **two independent levels** by design, and — unlike the
+`signature` text/keyword category — **does not require `--scan-content`**;
+it's its own switch that works with or without the rest of content scanning:
 
 ```bash
 pip install 'metascout[visual-signature]'
-metascout scan example.com --scan-content --visual-signature
+metascout scan example.com --visual-signature
 ```
 
 1. Installing `pip install 'metascout[visual-signature]'` alone does
@@ -493,6 +494,48 @@ metascout scan example.com --scan-content --visual-signature
    rasterization to Ghostscript) — confirmed live: without Ghostscript, it
    fails outright with a `DelegateError`. Expect ~150–250MB of native
    libraries on top of the usual install.
+
+**Run it later instead of inline.** This check is slow enough (see below)
+that most scans shouldn't wait on it. `metascout visual-signature-scan`
+runs it separately, afterward, against documents a normal scan already
+downloaded — no re-discovery, no re-download:
+
+```bash
+metascout scan example.com                    # fast, as usual
+metascout visual-signature-scan ./metascout_output   # slow, run whenever you want
+```
+
+It reads `report.json` from the given output directory, checks every
+successfully-downloaded document, prints a results table, and writes
+`visual_signature_report.json` next to it.
+
+**Live test results (real corpus, EXPERIMENTAL status confirmed):** run
+against 162 real PDFs collected during an authorized scan (form documents,
+announcements, and financial reports), the first 76 processed before the
+run was stopped for time:
+
+| | Count |
+|---|---|
+| Flagged as containing a visual signature | 26 (34%) |
+| Flagged as not containing one | 50 (66%) |
+| Runtime errors | 0 |
+
+Manually reviewing a sample of the flagged documents (with the real
+filenames/target omitted here — this project doesn't publish which specific
+documents belong to whom) found **both outcomes**: a document with a real
+company stamp and handwritten signature was correctly flagged, but so were
+two completely blank form templates — one because of its printed "Signature:"
+label and checkbox-grid borders, the other because of a logo and a diagonal
+watermark. This is exactly the kind of false positive the "heuristic,
+verify manually" warning above is about — **treat every hit as something to
+look at, not a confirmed signature.**
+
+**Runtime, measured on that same run**: from well under a second up to
+**131 seconds** for a single large multi-page financial report, dominated by
+Ghostscript's PDF rasterization at 200 DPI per page. The 76-document sample
+took about 1 hour 21 minutes in total — budget accordingly, and prefer
+`visual-signature-scan` on a curated subset over `--visual-signature` on an
+entire large scan.
 
 Other things worth knowing before turning this on:
 
@@ -572,6 +615,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout visual-signature-scan --help
 ```
 
 `metascout scan` takes one or more `TARGET` positional arguments
@@ -597,7 +641,7 @@ metascout web --help
 | `--ddgs-backend` | `auto` | Backend(s) for the `ddgs` engine, e.g. `duckduckgo`, `google`, `bing`, or a comma-separated list |
 | `--scan-content` / `--no-scan-content` | off | Also scan document body text for PII (see [Content scanning](#content-scanning-for-personal-data-optional)); needs `pip install 'metascout[content-scan]'` |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Comma-separated subset, only used with `--scan-content` |
-| `--visual-signature` / `--no-visual-signature` | off | Visual (image-based) signature detection; needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript, and `--scan-content` |
+| `--visual-signature` / `--no-visual-signature` | off | **EXPERIMENTAL**, independent of `--scan-content`: visual (image-based) signature detection; slow (see [above](#visual-wet-signature-detection--experimental-separately-opt-in)), needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -610,6 +654,20 @@ metascout web --help
 | `--port` | `8765` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where scan runs get saved |
 | `--open-browser` / `--no-open-browser` | on | Auto-open the browser on startup |
+
+`metascout visual-signature-scan REPORT_DIR` — runs the **EXPERIMENTAL**
+visual signature check (see [above](#visual-wet-signature-detection--experimental-separately-opt-in))
+against documents from a previous scan, without re-discovering or
+re-downloading anything:
+
+```bash
+metascout visual-signature-scan --help
+```
+
+| Argument/Option | Default | Description |
+|---|---|---|
+| `REPORT_DIR` | – | A scan's output directory (contains `report.json`), e.g. `./metascout_output` or a `web-YYYYMMDD-HHMMSS` folder |
+| `--json-out` | `REPORT_DIR/visual_signature_report.json` | Where to write the results |
 
 ## Output layout
 
@@ -648,7 +706,7 @@ src/metascout/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
 ├── pipeline.py              discover → download → extract → analyze flow (shared by CLI and web)
-├── cli.py                   click-based `metascout scan` / `metascout web` commands
+├── cli.py                   click-based `metascout scan` / `web` / `visual-signature-scan` commands
 └── web.py                   Flask-based local web UI
 ```
 

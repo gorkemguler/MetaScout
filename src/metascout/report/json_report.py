@@ -23,6 +23,7 @@ def render_json_report(findings: ScanFindings) -> str:
             {
                 "url": d.url,
                 "filetype": d.filetype,
+                "local_path": d.local_path,
                 "error": d.error,
                 "metadata": d.raw,
             }

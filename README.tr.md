@@ -41,7 +41,7 @@
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
 - [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
-  - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--ayrıca-opsiyonel)
+  - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -469,7 +469,7 @@ Metin çıkarımı PDF (`pypdf` ile), `.docx`/`.xlsx`/`.pptx` ve
 (`olefile`) gerektirir, görece nadir kazanımlar için, bu yüzden atlanır
 (bu formatlarda metadata taraması normal şekilde çalışmaya devam eder).
 
-### Görsel (ıslak) imza tespiti — ayrıca opsiyonel
+### Görsel (ıslak) imza tespiti — DENEYSEL, ayrıca opsiyonel
 
 Yukarıdaki her şey, `signature` kategorisi dahil, sadece belgenin **metnini**
 görür — gövdede "signed by" gibi bir kelime, ya da PDF'in `/Sig` alanı.
@@ -480,12 +480,14 @@ sezgisel görüntü işleme hattını (parlaklık eşikleme → bağlı bölge �
 aspect-ratio/piksel-yoğunluk değerlendirmesi) çalıştırarak el yazısı imza
 şeklindeki mürekkep lekelerini işaretliyor.
 
-Bu, bilerek **iki bağımsız seviyede** opsiyonel yapıldı ve sadece
-`--scan-content` ile birlikte etkili oluyor:
+Bu, bilerek **iki bağımsız seviyede** opsiyonel yapıldı, ve — `signature`
+metin/anahtar-kelime kategorisinin aksine — **`--scan-content` gerektirmiyor**;
+içerik taramasının geri kalanıyla ya da onsuz çalışan kendi başına bir
+anahtar:
 
 ```bash
 pip install 'metascout[visual-signature]'
-metascout scan example.com --scan-content --visual-signature
+metascout scan example.com --visual-signature
 ```
 
 1. Sadece `pip install 'metascout[visual-signature]'` yapmak **hiçbir şey
@@ -497,6 +499,51 @@ metascout scan example.com --scan-content --visual-signature
    devrediyor) — canlı doğrulandı: Ghostscript olmadan doğrudan
    `DelegateError` ile başarısız oluyor. Normal kuruluma ek olarak ~150–250MB
    native kütüphane bekleyin.
+
+**Bunu sonradan, ayrıca çalıştırın.** Bu kontrol yeterince yavaş (aşağıya
+bakın) ki çoğu taramanın onu beklemesi mantıklı değil. `metascout
+visual-signature-scan`, normal bir taramanın zaten indirdiği belgeler
+üzerinde, ayrıca ve sonradan çalışır — tekrar keşif ya da tekrar indirme
+yok:
+
+```bash
+metascout scan example.com                          # hızlı, her zamanki gibi
+metascout visual-signature-scan ./metascout_output   # yavaş, ne zaman isterseniz
+```
+
+Verilen çıktı dizinindeki `report.json`'ı okur, başarıyla indirilmiş her
+belgeyi kontrol eder, bir sonuç tablosu basar ve yanına
+`visual_signature_report.json` yazar.
+
+**Canlı test sonuçları (gerçek veri kümesi, DENEYSEL statü doğrulandı):**
+yetkili bir tarama sırasında toplanan 162 gerçek PDF'e karşı (form belgeleri,
+duyurular ve finansal raporlar) çalıştırıldı; süre nedeniyle durdurulmadan
+önce ilk 76'sı işlendi:
+
+| | Sayı |
+|---|---|
+| Görsel imza içerdiği işaretlenen | 26 (%34) |
+| İçermediği işaretlenen | 50 (%66) |
+| Çalışma zamanı hatası | 0 |
+
+İşaretlenen belgelerden bir örneklemi elle inceledim (gerçek dosya
+adları/hedef burada belirtilmiyor — bu proje hangi belgenin kime ait
+olduğunu yayınlamıyor) ve **her iki sonucu da** buldum: gerçek bir şirket
+kaşesi ve el yazısı imza içeren bir belge doğru işaretlendi, ama iki
+tamamen boş form şablonu da işaretlendi — biri yazdırılmış "İmza:"
+etiketi ve kutucuk-ızgara kenarları yüzünden, diğeri bir logo ve çapraz
+bir filigran yüzünden. Bu, tam olarak yukarıdaki "sezgisel, elle
+doğrulayın" uyarısının anlattığı türden bir yanlış pozitif —
+**her bulguyu bakılması gereken bir şey olarak görün, doğrulanmış bir
+imza olarak değil.**
+
+**Aynı çalışmada ölçülen süre**: bir saniyenin çok altından, tek bir büyük
+çok-sayfalı finansal rapor için **131 saniyeye** kadar değişiyor, ağırlıklı
+olarak Ghostscript'in sayfa başına 200 DPI'da PDF rasterizasyonundan
+kaynaklanıyor. 76 belgelik örneklem toplam yaklaşık 1 saat 21 dakika sürdü
+— buna göre bütçeleyin, ve büyük bir taramanın tamamında
+`--visual-signature` kullanmak yerine seçilmiş bir alt kümede
+`visual-signature-scan` kullanmayı tercih edin.
 
 Açmadan önce bilmekte fayda var:
 
@@ -578,6 +625,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout visual-signature-scan --help
 ```
 
 `metascout scan` bir veya daha fazla `TARGET` pozisyonel argümanı alır
@@ -603,7 +651,7 @@ metascout web --help
 | `--ddgs-backend` | `auto` | `ddgs` motoru için motor(lar), ör. `duckduckgo`, `google`, `bing` ya da virgülle ayrılmış liste |
 | `--scan-content` / `--no-scan-content` | kapalı | Belge gövde metnini de PII için tarar (bkz. [Kişisel veri içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)); `pip install 'metascout[content-scan]'` gerekir |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
-| `--visual-signature` / `--no-visual-signature` | kapalı | Görsel (görüntü tabanlı) imza tespiti; `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript ve `--scan-content` gerektirir |
+| `--visual-signature` / `--no-visual-signature` | kapalı | **DENEYSEL**, `--scan-content`'ten bağımsız: görsel (görüntü tabanlı) imza tespiti; yavaş (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)), `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript gerektirir |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -616,6 +664,20 @@ metascout web --help
 | `--port` | `8765` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Taramaların kaydedileceği klasör |
 | `--open-browser` / `--no-open-browser` | açık | Başlarken tarayıcıyı otomatik aç |
+
+`metascout visual-signature-scan REPORT_DIR` — **DENEYSEL** görsel imza
+kontrolünü (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel))
+önceki bir taramanın belgelerine karşı, tekrar keşif ya da indirme
+yapmadan çalıştırır:
+
+```bash
+metascout visual-signature-scan --help
+```
+
+| Argüman/Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `REPORT_DIR` | – | Bir taramanın çıktı dizini (`report.json` içerir), ör. `./metascout_output` ya da bir `web-YYYYMMDD-HHMMSS` klasörü |
+| `--json-out` | `REPORT_DIR/visual_signature_report.json` | Sonuçların yazılacağı yer |
 
 ## Çıktı yapısı
 
@@ -654,7 +716,7 @@ src/metascout/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor
 ├── pipeline.py              discover → download → extract → analyze akışı (CLI ve web'in ortak motoru)
-├── cli.py                   click tabanlı `metascout scan` / `metascout web` komutları
+├── cli.py                   click tabanlı `metascout scan` / `web` / `visual-signature-scan` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 

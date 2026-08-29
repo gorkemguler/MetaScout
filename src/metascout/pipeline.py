@@ -173,24 +173,30 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     log("analyzing metadata ...")
     findings = analyze(doc_metadata, targets=cfg.targets)
 
+    content_hits: list[ContentFinding] = []
+    # Independent switches on purpose: the fast text/PII scan (--scan-content)
+    # and the slow, experimental visual signature check (--visual-signature)
+    # don't need each other — run whichever one(s) were actually asked for.
     if cfg.scan_content:
-        findings.content_findings = _scan_content(doc_metadata, cfg, log)
+        content_hits.extend(_scan_content(doc_metadata, cfg, log))
+    if cfg.visual_signature:
+        content_hits.extend(scan_visual_signatures(doc_metadata, log))
+    findings.content_findings = content_hits
 
     return findings
 
 
 def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
     categories = set(cfg.content_categories) or set()
-    if not categories and not cfg.visual_signature:
+    if not categories:
         return []
 
-    missing = missing_dependencies(categories, visual_signature=cfg.visual_signature)
+    missing = missing_dependencies(categories)
     if missing:
         log(
             "! content scan: missing optional dependencies (" + ", ".join(missing) + "). "
-            "Install with `pip install 'metascout[content-scan]'` (and, for visual "
-            "signature detection, `pip install 'metascout[visual-signature]'`) for "
-            "full coverage; continuing with what's available."
+            "Install with `pip install 'metascout[content-scan]'` for full coverage; "
+            "continuing with what's available."
         )
 
     log("scanning document content for personal/critical data (opt-in, heuristic) ...")
@@ -199,27 +205,56 @@ def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
         if doc.error:
             continue
         try:
-            doc_hits = scan_document(doc.local_path, doc.filetype, categories=categories) if categories else []
+            doc_hits = scan_document(doc.local_path, doc.filetype, categories=categories)
         except Exception as exc:
             log(f"! content scan failed for {doc.url}: {exc}")
-            doc_hits = []
+            continue
         for h in doc_hits:
             h.document_url = doc.url
         hits.extend(doc_hits)
 
-        if cfg.visual_signature:
-            try:
-                visually_signed = detect_visual_signature(doc.local_path, doc.filetype)
-            except Exception as exc:
-                log(f"! visual signature check failed for {doc.url}: {exc}")
-                visually_signed = None
-            if visually_signed:
-                hits.append(ContentFinding(
-                    document_url=doc.url, category="signature",
-                    masked_value="visual: signature-shaped ink detected in page image "
-                                 "(heuristic image analysis — verify manually)",
-                ))
-
     if hits:
         log(f"  {len(hits)} potential sensitive-content hit(s) found — verify manually, this is heuristic, not confirmed")
+    return hits
+
+
+def scan_visual_signatures(doc_metadata, log: LogFn = _noop_log) -> list[ContentFinding]:
+    """Runs the slow, experimental, image-based signature check
+    (--visual-signature) over already-downloaded/extracted documents.
+
+    Deliberately its own function, independent of _scan_content(), reused by
+    both `run_scan()` (for a combined single-pass `metascout scan
+    --visual-signature`) and the standalone `metascout visual-signature-scan`
+    command (for running it later, on its own, against documents from a
+    prior scan — this check alone can take on the order of a minute per
+    document, so most users won't want it slowing down every scan).
+    """
+    missing = missing_dependencies(set(), visual_signature=True)
+    if missing:
+        log(
+            "! visual signature scan: missing optional dependencies (" + ", ".join(missing) + "). "
+            "Install with `pip install 'metascout[visual-signature]'` (plus ImageMagick and "
+            "Ghostscript, installed system-wide) to actually run this check."
+        )
+        return []
+
+    log("scanning document page images for handwritten (wet) signatures (opt-in, slow, experimental) ...")
+    hits = []
+    for doc in doc_metadata:
+        if doc.error:
+            continue
+        try:
+            visually_signed = detect_visual_signature(doc.local_path, doc.filetype)
+        except Exception as exc:
+            log(f"! visual signature check failed for {doc.url}: {exc}")
+            continue
+        if visually_signed:
+            hits.append(ContentFinding(
+                document_url=doc.url, category="signature",
+                masked_value="visual: signature-shaped ink detected in page image "
+                             "(heuristic image analysis — verify manually)",
+            ))
+
+    if hits:
+        log(f"  {len(hits)} potential visual signature hit(s) found — verify manually, this is experimental and heuristic")
     return hits

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from metascout.config import ScanConfig
 from metascout.models import ContentFinding, DiscoveredDocument, DiscoverySource, DocumentMetadata
-from metascout.pipeline import run_scan
+from metascout.pipeline import run_scan, scan_visual_signatures
 
 
 def _cfg(**overrides) -> ScanConfig:
@@ -188,3 +188,49 @@ def test_run_scan_visual_signature_disabled_when_content_categories_empty_and_fl
     mock_scan_document.assert_not_called()
     mock_detect.assert_not_called()
     assert findings.content_findings == []
+
+
+def test_run_scan_visual_signature_works_independently_of_scan_content():
+    # Regression: --visual-signature used to only take effect nested inside
+    # --scan-content. It's now fully independent — a user should be able to
+    # turn on just the (slow) visual check without the (fast) text/PII scan.
+    cfg = _cfg(manual_urls=["https://example.com/a.pdf"], scan_content=False, visual_signature=True)
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]), \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document") as mock_scan_document, \
+         patch("metascout.pipeline.detect_visual_signature", return_value=True) as mock_detect:
+        findings = run_scan(cfg)
+
+    mock_scan_document.assert_not_called()  # scan_content is off
+    mock_detect.assert_called_once_with("/tmp/a.pdf", "pdf")
+    assert len(findings.content_findings) == 1
+    assert findings.content_findings[0].category == "signature"
+
+
+def test_scan_visual_signatures_skips_documents_with_errors():
+    doc_metadata = [
+        DocumentMetadata(url="https://example.com/ok.pdf", local_path="/tmp/ok.pdf", filetype="pdf"),
+        DocumentMetadata(url="https://example.com/bad.pdf", local_path="", filetype="pdf", error="404"),
+    ]
+    with patch("metascout.pipeline.detect_visual_signature", return_value=True) as mock_detect:
+        hits = scan_visual_signatures(doc_metadata)
+
+    mock_detect.assert_called_once_with("/tmp/ok.pdf", "pdf")
+    assert len(hits) == 1
+    assert hits[0].document_url == "https://example.com/ok.pdf"
+
+
+def test_scan_visual_signatures_logs_and_returns_empty_when_dependency_missing():
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+    logs = []
+    with patch("metascout.pipeline.missing_dependencies", return_value=["signature-detect (...)"]), \
+         patch("metascout.pipeline.detect_visual_signature") as mock_detect:
+        hits = scan_visual_signatures(doc_metadata, log=logs.append)
+
+    mock_detect.assert_not_called()
+    assert hits == []
+    assert any("missing optional dependencies" in m for m in logs)

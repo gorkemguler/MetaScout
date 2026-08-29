@@ -39,8 +39,11 @@ class ScanConfig:
     ddgs_backend: str = "auto"
     scan_content: bool = False
     content_categories: list[str] = field(default_factory=lambda: list(DEFAULT_CONTENT_CATEGORIES))
-    # Double opt-in on purpose: only takes effect when scan_content is also
-    # on, and even then only if the (heavy, unmaintained-upstream)
-    # signature-detect package + ImageMagick/Ghostscript are installed.
-    # See content_scan/visual_signature.py.
+    # Independent of scan_content on purpose — the fast text/PII scan and
+    # this slow (often 10s-130s per document, live-tested), experimental,
+    # image-based check don't need each other. Also only takes effect if the
+    # (heavy, unmaintained-upstream) signature-detect package +
+    # ImageMagick/Ghostscript are installed. See content_scan/visual_signature.py
+    # and the standalone `metascout visual-signature-scan` command, for
+    # running this later against documents from a prior scan.
     visual_signature: bool = False
