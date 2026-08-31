@@ -328,6 +328,66 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
     console.print(f"\n[green]Results:[/green] {out_path}")
 
 
+@main.command("local-scan")
+@click.argument("directory", type=click.Path(exists=True, file_okay=False))
+@click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions to look for in DIRECTORY.")
+@click.option("--scan-content/--no-scan-content", default=False, help="Also scan document body text for PII (see --content-categories). Requires pip install 'metascout[content-scan]'.")
+@click.option("--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True, help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature. Only used with --scan-content.")
+@click.option("--visual-signature/--no-visual-signature", default=False, help="EXPERIMENTAL: also run the slow, heuristic, image-based signature check. Requires pip install 'metascout[visual-signature]' plus ImageMagick and Ghostscript installed system-wide.")
+@click.option("--json-report/--no-json-report", default=True)
+@click.option("--html-report/--no-html-report", default=True)
+@click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True)
+@click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path())
+def local_scan(
+    directory: str, filetypes: str, scan_content: bool, content_categories: str,
+    visual_signature: bool, json_report: bool, html_report: bool, report_lang: str, output_dir: str,
+) -> None:
+    """Analyze documents already sitting in DIRECTORY — no discovery, no
+    download, just metadata extraction plus whichever optional checks you
+    ask for (--scan-content, --visual-signature).
+
+    For a folder of documents you already have (your own files, or ones
+    gathered by some other means) that you just want run through
+    MetaScout's analysis, without pointing it at a live target.
+    """
+    from .pipeline import run_local_document_scan
+
+    cfg_categories = [c.strip().lower() for c in content_categories.split(",") if c.strip()]
+    ft_list = [f.strip().lower().lstrip(".") for f in filetypes.split(",") if f.strip()]
+
+    _print_banner()
+    console.print(f"[bold]MetaScout[/bold] analyzing documents in [bold]{directory}[/bold]")
+
+    try:
+        findings = run_local_document_scan(
+            directory, filetypes=ft_list, scan_content=scan_content,
+            content_categories=cfg_categories, visual_signature=visual_signature, log=_cli_log,
+        )
+    except RuntimeError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        sys.exit(1)
+
+    if not findings.documents:
+        console.print("[yellow]No matching documents found. Nothing to analyze.[/yellow]")
+        sys.exit(0)
+
+    console.print()
+    _print_summary(findings)
+
+    os.makedirs(output_dir, exist_ok=True)
+    if json_report:
+        json_path = os.path.join(output_dir, "report.json")
+        with open(json_path, "w", encoding="utf-8") as fh:
+            fh.write(render_json_report(findings))
+        console.print(f"\n[green]JSON report:[/green] {json_path}")
+
+    if html_report:
+        html_path = os.path.join(output_dir, "report.html")
+        with open(html_path, "w", encoding="utf-8") as fh:
+            fh.write(render_html_report(findings, lang=report_lang))
+        console.print(f"[green]HTML report:[/green] {html_path}")
+
+
 @main.command()
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=8765, show_default=True)

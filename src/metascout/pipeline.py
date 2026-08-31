@@ -10,7 +10,7 @@ from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_sub
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
-from .models import ContentFinding, DiscoveredDocument, DiscoverySource, ScanFindings
+from .models import ContentFinding, DiscoveredDocument, DiscoverySource, DownloadedDocument, ScanFindings
 
 LogFn = Callable[[str], None]
 
@@ -178,7 +178,7 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     # and the slow, experimental visual signature check (--visual-signature)
     # don't need each other — run whichever one(s) were actually asked for.
     if cfg.scan_content:
-        content_hits.extend(_scan_content(doc_metadata, cfg, log))
+        content_hits.extend(_scan_content(doc_metadata, cfg.content_categories, log))
     if cfg.visual_signature:
         content_hits.extend(scan_visual_signatures(doc_metadata, log))
     findings.content_findings = content_hits
@@ -186,8 +186,8 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     return findings
 
 
-def _scan_content(doc_metadata, cfg: ScanConfig, log: LogFn) -> list:
-    categories = set(cfg.content_categories) or set()
+def _scan_content(doc_metadata, content_categories: list[str], log: LogFn) -> list:
+    categories = set(content_categories) or set()
     if not categories:
         return []
 
@@ -258,3 +258,71 @@ def scan_visual_signatures(doc_metadata, log: LogFn = _noop_log) -> list[Content
     if hits:
         log(f"  {len(hits)} potential visual signature hit(s) found — verify manually, this is experimental and heuristic")
     return hits
+
+
+def run_local_document_scan(
+    directory: str,
+    *,
+    filetypes: list[str],
+    scan_content: bool = False,
+    content_categories: list[str] | None = None,
+    visual_signature: bool = False,
+    log: LogFn = _noop_log,
+) -> ScanFindings:
+    """Analyzes documents already sitting on disk — metadata extraction,
+    plus the same optional content-scan/visual-signature checks as
+    `run_scan()` — with no discovery and no download step at all.
+
+    For the case where someone already has a folder of documents (their own
+    files, or ones gathered by some other means) and just wants them run
+    through MetaScout's analysis, without pointing it at a live target.
+    Shared by `metascout local-scan` and the web UI's standalone
+    "scan existing documents" page — the same lean, discovery-free flow
+    both use so they can't drift apart.
+    """
+    if not exiftool_available():
+        raise RuntimeError(
+            "exiftool not found on PATH. Install it first, e.g. "
+            "`brew install exiftool` (macOS) or `apt install libimage-exiftool-perl` (Debian/Ubuntu)."
+        )
+
+    filetype_set = {ft.lower().lstrip(".") for ft in filetypes if ft.strip()}
+    paths: list[str] = []
+    for root, _, names in os.walk(directory):
+        for name in names:
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if ext in filetype_set:
+                paths.append(os.path.join(root, name))
+    paths.sort()
+
+    log(f"found {len(paths)} matching file(s) in {directory}")
+    if not paths:
+        log("No matching documents found. Nothing to analyze.")
+        return analyze([], targets=[directory])
+
+    downloaded = []
+    for p in paths:
+        ext = p.rsplit(".", 1)[-1].lower() if "." in p else ""
+        try:
+            size = os.path.getsize(p)
+        except OSError:
+            size = 0
+        downloaded.append(DownloadedDocument(
+            url=f"file://{p}", local_path=p, filetype=ext,
+            source=DiscoverySource.MANUAL, size_bytes=size,
+        ))
+
+    log("extracting metadata with exiftool ...")
+    doc_metadata = extract_metadata(downloaded)
+
+    log("analyzing metadata ...")
+    findings = analyze(doc_metadata, targets=[directory])
+
+    content_hits: list[ContentFinding] = []
+    if scan_content:
+        content_hits.extend(_scan_content(doc_metadata, content_categories or [], log))
+    if visual_signature:
+        content_hits.extend(scan_visual_signatures(doc_metadata, log))
+    findings.content_findings = content_hits
+
+    return findings

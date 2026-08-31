@@ -9,7 +9,7 @@ from flask import Flask, request
 
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
-from .pipeline import run_scan
+from .pipeline import run_local_document_scan, run_scan
 from .report import render_html_report, render_json_report
 
 _STRINGS = {
@@ -88,6 +88,22 @@ _STRINGS = {
         "error_invalid_numbers": "Numeric fields are invalid.",
         "exiftool_warning": "exiftool not found — install it before scanning. See the README "
                              "installation steps.",
+        "nav_scan_label": "Discover & Scan a Target",
+        "nav_local_label": "Scan Existing Documents",
+        "local_intro": "Already have a folder of documents (your own files, or ones gathered some "
+                        "other way)? Analyze them directly — no target, no discovery, no download.",
+        "local_dir_label": "Directory path (on this machine)",
+        "local_dir_hint": "An absolute path readable by the account running <code>metascout web</code>, "
+                           "e.g. <code>/Users/you/Downloads/reports</code>. Every file inside it "
+                           "(searched recursively) matching the extensions below is analyzed.",
+        "local_or": "— or —",
+        "local_urls_label": "URL list (one full document URL per line)",
+        "local_urls_hint": "Downloads and analyzes these directly, no discovery. Fill in exactly one "
+                            "of directory-path-above or URL-list-here, not both.",
+        "local_error_no_source": "Provide either a directory path or a URL list.",
+        "local_error_both_sources": "Provide only one of directory path or URL list, not both.",
+        "local_error_dir_not_found": "That directory doesn't exist or isn't readable from this machine.",
+        "local_submit_label": "Analyze documents",
     },
     "tr": {
         "tagline": "Belge keşfi &amp; metadata sızıntı analizi — yerel web arayüzü",
@@ -166,6 +182,24 @@ _STRINGS = {
         "error_invalid_numbers": "Sayısal alanlar geçersiz.",
         "exiftool_warning": "exiftool bulunamadı — kurmadan tarama çalışmaz. README'deki kurulum "
                              "adımlarına bakın.",
+        "nav_scan_label": "Hedef Keşfet & Tara",
+        "nav_local_label": "Mevcut Belgeleri Tara",
+        "local_intro": "Zaten bir belge klasörünüz mü var (kendi dosyalarınız ya da başka bir "
+                        "şekilde topladıklarınız)? Doğrudan analiz edin — hedef yok, keşif yok, "
+                        "indirme yok.",
+        "local_dir_label": "Dizin yolu (bu makinede)",
+        "local_dir_hint": "<code>metascout web</code>'i çalıştıran hesabın okuyabildiği mutlak bir "
+                           "yol, ör. <code>/Users/siz/Downloads/raporlar</code>. İçindeki (özyinelemeli "
+                           "aranan) aşağıdaki uzantılarla eşleşen her dosya analiz edilir.",
+        "local_or": "— ya da —",
+        "local_urls_label": "URL listesi (her satıra bir tam belge URL'i)",
+        "local_urls_hint": "Bunları doğrudan indirip analiz eder, keşif yok. Yukarıdaki dizin yolu "
+                            "ya da buradaki URL listesinden tam olarak birini doldurun, ikisini "
+                            "birden değil.",
+        "local_error_no_source": "Bir dizin yolu ya da URL listesi girin.",
+        "local_error_both_sources": "Dizin yolu ya da URL listesinden yalnızca birini girin, ikisini birden değil.",
+        "local_error_dir_not_found": "Bu dizin yok ya da bu makineden okunamıyor.",
+        "local_submit_label": "Belgeleri analiz et",
     },
 }
 
@@ -194,6 +228,11 @@ _PAGE_HEAD = """<!DOCTYPE html>
   .lang-switch a {{ color: var(--muted); text-decoration: none; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; }}
   .lang-switch a.active {{ color: var(--bg); background: var(--accent); border-color: var(--accent); }}
   .lang-switch a:hover:not(.active) {{ color: var(--text); border-color: var(--muted); }}
+  .page-nav {{ display: flex; gap: 18px; margin-top: 10px; }}
+  .page-nav a {{ color: var(--muted); text-decoration: none; font-size: 12.5px; font-weight: 600;
+    padding-bottom: 2px; border-bottom: 2px solid transparent; }}
+  .page-nav a.active {{ color: var(--accent); border-bottom-color: var(--accent); }}
+  .page-nav a:hover:not(.active) {{ color: var(--text); }}
   main {{ padding: 24px 40px 60px; max-width: 760px; margin: 0 auto; }}
   .card {{ background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }}
   label {{ display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; margin-top: 16px; }}
@@ -239,10 +278,14 @@ _PAGE_HEAD = """<!DOCTYPE html>
   <div>
     <div class="banner">MetaScout</div>
     <div class="meta">{tagline}</div>
+    <div class="page-nav">
+      <a href="/?lang={ui_lang}" class="{nav_scan_active}">{nav_scan_label}</a>
+      <a href="/local-scan?lang={ui_lang}" class="{nav_local_active}">{nav_local_label}</a>
+    </div>
   </div>
   <div class="lang-switch">
-    <a href="/?lang=en" class="{en_active}">EN</a>
-    <a href="/?lang=tr" class="{tr_active}">TR</a>
+    <a href="{base_path}?lang=en" class="{en_active}">EN</a>
+    <a href="{base_path}?lang=tr" class="{tr_active}">TR</a>
   </div>
 </header>
 <main>
@@ -331,6 +374,23 @@ _FORM_BODY = """
 """
 
 
+def _render_page_head(ui_lang: str, current_page: str) -> str:
+    """current_page is "scan" or "local" — drives both which nav link is
+    highlighted and which page the EN/TR language switcher stays on."""
+    base_path = "/local-scan" if current_page == "local" else "/"
+    return _PAGE_HEAD.format(
+        ui_lang=ui_lang,
+        tagline=_t(ui_lang, "tagline"),
+        base_path=base_path,
+        en_active="active" if ui_lang == "en" else "",
+        tr_active="active" if ui_lang == "tr" else "",
+        nav_scan_label=_t(ui_lang, "nav_scan_label"),
+        nav_local_label=_t(ui_lang, "nav_local_label"),
+        nav_scan_active="active" if current_page == "scan" else "",
+        nav_local_active="active" if current_page == "local" else "",
+    )
+
+
 def _render_form(
     ui_lang: str = "en",
     error: str | None = None,
@@ -353,12 +413,7 @@ def _render_form(
     brave_ready = bool(os.environ.get("BRAVE_API_KEY"))
     key_found_hint = " (anahtar bulundu)" if ui_lang == "tr" else " (key found)"
 
-    page_head = _PAGE_HEAD.format(
-        ui_lang=ui_lang,
-        tagline=_t(ui_lang, "tagline"),
-        en_active="active" if ui_lang == "en" else "",
-        tr_active="active" if ui_lang == "tr" else "",
-    )
+    page_head = _render_page_head(ui_lang, "scan")
     body = _FORM_BODY.format(
         error_block=error_block,
         exiftool_block=exiftool_block,
@@ -406,6 +461,105 @@ def _render_form(
         google_hint=key_found_hint if google_ready else "",
         serper_hint=key_found_hint if serper_ready else "",
         brave_hint=key_found_hint if brave_ready else "",
+    )
+    return page_head + body + _PAGE_TAIL
+
+
+_LOCAL_SCAN_FORM_BODY = """
+{error_block}
+{exiftool_block}
+<p class="hint" style="margin-bottom:20px;">{local_intro}</p>
+<form class="card" method="post" action="/local-scan" onsubmit="document.getElementById('submit-btn').disabled=true;document.getElementById('submit-btn').textContent='{submit_loading_label}';document.getElementById('scanning').className='scanning active';">
+  <input type="hidden" name="ui_lang" value="{ui_lang}">
+  <label for="local_dir">{local_dir_label}</label>
+  <input type="text" id="local_dir" name="local_dir" placeholder="/Users/you/Downloads/reports" value="{local_dir_value}">
+  <div class="hint">{local_dir_hint}</div>
+
+  <div class="hint" style="text-align:center;margin:16px 0;">{local_or}</div>
+
+  <label for="local_urls">{local_urls_label}</label>
+  <textarea id="local_urls" name="local_urls" placeholder="https://example.com/reports/2023.pdf&#10;https://example.com/files/notes.docx">{local_urls_value}</textarea>
+  <div class="hint">{local_urls_hint}</div>
+
+  <label for="filetypes">{filetypes_label}</label>
+  <input type="text" id="filetypes" name="filetypes" value="{filetypes_value}">
+
+  <label><input type="checkbox" name="scan_content" id="scan_content"> {content_scan_label}</label>
+  <div class="hint">{content_scan_hint}</div>
+  <label>{content_categories_label}</label>
+  <div class="checks">
+    <label><input type="checkbox" name="content_categories" value="tc_kimlik" checked> {cat_tc_kimlik}</label>
+    <label><input type="checkbox" name="content_categories" value="email_phone" checked> {cat_email_phone}</label>
+    <label><input type="checkbox" name="content_categories" value="iban_card" checked> {cat_iban_card}</label>
+    <label><input type="checkbox" name="content_categories" value="address_dob" checked> {cat_address_dob}</label>
+    <label><input type="checkbox" name="content_categories" value="signature" checked> {cat_signature}</label>
+  </div>
+
+  <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
+  <div class="hint">{visual_signature_hint}</div>
+
+  <label>{report_lang_label}</label>
+  <div class="checks">
+    <label><input type="radio" name="report_lang" value="en" {report_lang_en_checked}> English</label>
+    <label><input type="radio" name="report_lang" value="tr" {report_lang_tr_checked}> Türkçe</label>
+  </div>
+
+  <button type="submit" id="submit-btn">{local_submit_label}</button>
+  <div class="scanning" id="scanning"><div class="spinner"></div> {scanning_hint}</div>
+  <div class="hint">{footer_hint}</div>
+</form>
+"""
+
+
+def _render_local_form(
+    ui_lang: str = "en",
+    error: str | None = None,
+    local_dir_value: str = "",
+    local_urls_value: str = "",
+    filetypes_value: str | None = None,
+) -> str:
+    if ui_lang not in _STRINGS:
+        ui_lang = "en"
+
+    error_block = f'<div class="error">{error}</div>' if error else ""
+    exiftool_block = (
+        ""
+        if exiftool_available()
+        else f'<div class="warn">{_t(ui_lang, "exiftool_warning")}</div>'
+    )
+
+    page_head = _render_page_head(ui_lang, "local")
+    body = _LOCAL_SCAN_FORM_BODY.format(
+        error_block=error_block,
+        exiftool_block=exiftool_block,
+        ui_lang=ui_lang,
+        local_intro=_t(ui_lang, "local_intro"),
+        local_dir_label=_t(ui_lang, "local_dir_label"),
+        local_dir_hint=_t(ui_lang, "local_dir_hint"),
+        local_dir_value=local_dir_value,
+        local_or=_t(ui_lang, "local_or"),
+        local_urls_label=_t(ui_lang, "local_urls_label"),
+        local_urls_hint=_t(ui_lang, "local_urls_hint"),
+        local_urls_value=local_urls_value,
+        filetypes_label=_t(ui_lang, "filetypes_label"),
+        filetypes_value=filetypes_value if filetypes_value is not None else ",".join(DEFAULT_FILETYPES),
+        content_scan_label=_t(ui_lang, "content_scan_label"),
+        content_scan_hint=_t(ui_lang, "content_scan_hint"),
+        content_categories_label=_t(ui_lang, "content_categories_label"),
+        cat_tc_kimlik=_t(ui_lang, "cat_tc_kimlik"),
+        cat_email_phone=_t(ui_lang, "cat_email_phone"),
+        cat_iban_card=_t(ui_lang, "cat_iban_card"),
+        cat_address_dob=_t(ui_lang, "cat_address_dob"),
+        cat_signature=_t(ui_lang, "cat_signature"),
+        visual_signature_label=_t(ui_lang, "visual_signature_label"),
+        visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
+        report_lang_label=_t(ui_lang, "report_lang_label"),
+        report_lang_en_checked="checked" if ui_lang != "tr" else "",
+        report_lang_tr_checked="checked" if ui_lang == "tr" else "",
+        local_submit_label=_t(ui_lang, "local_submit_label"),
+        submit_loading_label=_t(ui_lang, "submit_loading_label"),
+        scanning_hint=_t(ui_lang, "scanning_hint"),
+        footer_hint=_t(ui_lang, "footer_hint"),
     )
     return page_head + body + _PAGE_TAIL
 
@@ -505,6 +659,81 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             fh.write(render_json_report(findings))
 
         _log(f"scan finished: {len(findings.documents)} document(s), report saved to {run_dir}")
+        return html
+
+    @app.get("/local-scan")
+    def local_scan_index():
+        ui_lang = _clean_ui_lang(request.args.get("lang"))
+        return _render_local_form(ui_lang=ui_lang)
+
+    @app.post("/local-scan")
+    def local_scan():
+        ui_lang = _clean_ui_lang(request.form.get("ui_lang"))
+
+        raw_local_dir = request.form.get("local_dir", "").strip()
+        raw_local_urls = request.form.get("local_urls", "")
+        local_urls = list(dict.fromkeys(u.strip() for u in raw_local_urls.splitlines() if u.strip()))
+
+        if raw_local_dir and local_urls:
+            return _render_local_form(
+                ui_lang=ui_lang, error=_t(ui_lang, "local_error_both_sources"),
+                local_dir_value=raw_local_dir, local_urls_value=raw_local_urls,
+            ), 400
+        if not raw_local_dir and not local_urls:
+            return _render_local_form(
+                ui_lang=ui_lang, error=_t(ui_lang, "local_error_no_source"),
+                local_dir_value=raw_local_dir, local_urls_value=raw_local_urls,
+            ), 400
+        if raw_local_dir and not os.path.isdir(raw_local_dir):
+            return _render_local_form(
+                ui_lang=ui_lang, error=_t(ui_lang, "local_error_dir_not_found"),
+                local_dir_value=raw_local_dir, local_urls_value=raw_local_urls,
+            ), 400
+
+        filetypes_value = request.form.get("filetypes", ",".join(DEFAULT_FILETYPES))
+        filetypes = [f.strip().lower().lstrip(".") for f in filetypes_value.split(",") if f.strip()]
+        scan_content = request.form.get("scan_content") == "on"
+        content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
+        visual_signature = request.form.get("visual_signature") == "on"
+        report_lang = request.form.get("report_lang", "en")
+        if report_lang not in ("en", "tr"):
+            report_lang = "en"
+
+        run_dir = os.path.join(output_dir, "local-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+        def _log(message: str) -> None:
+            print(f"[metascout web] {message}", flush=True)
+
+        try:
+            if raw_local_dir:
+                _log(f"local-scan started: directory={raw_local_dir}")
+                findings = run_local_document_scan(
+                    raw_local_dir, filetypes=filetypes, scan_content=scan_content,
+                    content_categories=content_categories, visual_signature=visual_signature, log=_log,
+                )
+            else:
+                _log(f"local-scan started: {len(local_urls)} URL(s), no discovery")
+                targets = sorted({urlparse(u).netloc for u in local_urls if urlparse(u).netloc})
+                cfg = ScanConfig(
+                    targets=targets, manual_urls=local_urls, filetypes=filetypes, engines=[],
+                    output_dir=run_dir, scan_content=scan_content,
+                    content_categories=content_categories, visual_signature=visual_signature,
+                )
+                findings = run_scan(cfg, log=_log)
+        except RuntimeError as exc:
+            return _render_local_form(
+                ui_lang=ui_lang, error=str(exc),
+                local_dir_value=raw_local_dir, local_urls_value=raw_local_urls, filetypes_value=filetypes_value,
+            ), 500
+
+        os.makedirs(run_dir, exist_ok=True)
+        html = render_html_report(findings, lang=report_lang)
+        with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
+            fh.write(html)
+        with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
+            fh.write(render_json_report(findings))
+
+        _log(f"local-scan finished: {len(findings.documents)} document(s), report saved to {run_dir}")
         return html
 
     return app

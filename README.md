@@ -343,6 +343,15 @@ the internet. To use the `google`/`serper`/`brave` checkboxes, the matching API
 keys need to be set via environment variable or `.env` (see [Search engine API
 keys](#search-engine-api-keys-optional)).
 
+**"Scan Existing Documents"** (top nav) is a second, separate page for a
+different case: you already have documents — your own files, or ones
+gathered some other way — and just want them analyzed, with no target and
+no discovery. Give it either a local directory path (searched recursively)
+or a URL list (downloaded directly, no discovery), plus optional
+content-scan and visual-signature checks, same as the main form. It's kept
+on its own page rather than crammed into the main form specifically to keep
+that one from getting harder to read as more scan options get added.
+
 ## Wayback Machine discovery
 
 The `wayback` engine (on by default, no API key needed) queries the [Wayback
@@ -615,6 +624,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout local-scan --help
 metascout visual-signature-scan --help
 ```
 
@@ -654,6 +664,23 @@ metascout visual-signature-scan --help
 | `--port` | `8765` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where scan runs get saved |
 | `--open-browser` / `--no-open-browser` | on | Auto-open the browser on startup |
+
+`metascout local-scan DIRECTORY` — analyzes documents already sitting in
+`DIRECTORY` (searched recursively): no discovery, no download, just
+metadata extraction plus whichever optional checks you ask for. The CLI
+equivalent of the web UI's "Scan Existing Documents" page — for a folder of
+documents you already have, not a live target. (For the URL-list
+equivalent from the command line, use `metascout scan --urls-file urls.txt
+--engines ""` — no target/`--targets-file` needed, hostnames are derived
+from the URLs and no discovery runs since `--engines` is empty.)
+
+```bash
+metascout local-scan ~/Downloads/reports --scan-content --visual-signature
+```
+
+Takes the same `--filetypes`, `--scan-content`, `--content-categories`,
+`--visual-signature`, `--json-report`/`--html-report`, `--report-lang`, and
+`--output-dir` options as `metascout scan` (see the table above).
 
 `metascout visual-signature-scan REPORT_DIR` — runs the **EXPERIMENTAL**
 visual signature check (see [above](#visual-wet-signature-detection--experimental-separately-opt-in))
@@ -706,7 +733,7 @@ src/metascout/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
 ├── pipeline.py              discover → download → extract → analyze flow (shared by CLI and web)
-├── cli.py                   click-based `metascout scan` / `web` / `visual-signature-scan` commands
+├── cli.py                   click-based `scan` / `web` / `local-scan` / `visual-signature-scan` commands
 └── web.py                   Flask-based local web UI
 ```
 

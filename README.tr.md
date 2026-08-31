@@ -343,6 +343,15 @@ Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir)
 için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
 olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
 
+**"Mevcut Belgeleri Tara"** (üst navigasyon) farklı bir durum için ikinci,
+ayrı bir sayfa: zaten belgeleriniz var — kendi dosyalarınız ya da başka bir
+şekilde topladıklarınız — ve sadece analiz edilmelerini istiyorsunuz, hedef
+yok, keşif yok. Ya bir yerel dizin yolu (özyinelemeli aranır) ya da bir URL
+listesi (doğrudan indirilir, keşif yok) verin, artı isteğe bağlı içerik
+taraması ve görsel imza kontrolleri, ana form ile aynı. Bunu bilerek ayrı
+bir sayfada tuttuk, ana forma sıkıştırmak yerine — çünkü ana form zaten daha
+fazla tarama seçeneği eklendikçe okunması zorlaşıyordu.
+
 ## Wayback Machine keşfi
 
 `wayback` motoru (varsayılan olarak açık, API anahtarı gerekmez) [Wayback
@@ -625,6 +634,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout local-scan --help
 metascout visual-signature-scan --help
 ```
 
@@ -664,6 +674,23 @@ metascout visual-signature-scan --help
 | `--port` | `8765` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Taramaların kaydedileceği klasör |
 | `--open-browser` / `--no-open-browser` | açık | Başlarken tarayıcıyı otomatik aç |
+
+`metascout local-scan DIRECTORY` — `DIRECTORY`'de (özyinelemeli aranır)
+zaten bulunan belgeleri analiz eder: keşif yok, indirme yok, sadece
+metadata çıkarımı artı istediğiniz opsiyonel kontroller. Web arayüzünün
+"Mevcut Belgeleri Tara" sayfasının CLI karşılığı — canlı bir hedef değil,
+zaten sahip olduğunuz bir belge klasörü için. (Terminalden URL-listesi
+karşılığı için: `metascout scan --urls-file urls.txt --engines ""` —
+hedef/`--targets-file` gerekmez, hostname'ler URL'lerden çıkarılır ve
+`--engines` boş olduğu için keşif çalışmaz.)
+
+```bash
+metascout local-scan ~/Downloads/raporlar --scan-content --visual-signature
+```
+
+`metascout scan` ile aynı `--filetypes`, `--scan-content`,
+`--content-categories`, `--visual-signature`, `--json-report`/`--html-report`,
+`--report-lang` ve `--output-dir` seçeneklerini alır (yukarıdaki tabloya bakın).
 
 `metascout visual-signature-scan REPORT_DIR` — **DENEYSEL** görsel imza
 kontrolünü (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel))
@@ -716,7 +743,7 @@ src/metascout/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor
 ├── pipeline.py              discover → download → extract → analyze akışı (CLI ve web'in ortak motoru)
-├── cli.py                   click tabanlı `metascout scan` / `web` / `visual-signature-scan` komutları
+├── cli.py                   click tabanlı `scan` / `web` / `local-scan` / `visual-signature-scan` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 
