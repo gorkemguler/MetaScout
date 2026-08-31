@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import metascout.web as web_module
 from metascout.web import create_app
 
 
@@ -202,3 +203,52 @@ def test_local_scan_url_mode_calls_run_scan_with_no_discovery(tmp_path):
     assert captured_cfg["engines"] == []
     assert captured_cfg["targets"] == ["example.com"]
     assert captured_cfg["manual_urls"] == ["https://example.com/a.pdf", "https://example.com/b.pdf"]
+
+
+def test_scan_log_stream_returns_immediately_for_unknown_scan_id():
+    app = create_app()
+    client = app.test_client()
+    resp = client.get("/scan-log/no-such-scan-id")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/event-stream"
+    assert resp.get_data() == b""  # generator returns on the first iteration, nothing buffered
+
+
+def test_scan_log_stream_yields_pushed_messages_as_sse_events():
+    app = create_app()
+    client = app.test_client()
+    web_module._register_scan_log("test-scan-1")
+    web_module._push_scan_log("test-scan-1", "hello from the scan")
+
+    resp = client.get("/scan-log/test-scan-1", buffered=False)
+    try:
+        chunk = next(iter(resp.response))
+        assert b"hello from the scan" in chunk
+        assert chunk.startswith(b"data: ")
+    finally:
+        resp.response.close()  # stop the (otherwise long-lived) generator so the test doesn't hang
+
+
+def test_register_scan_log_evicts_oldest_entry_past_the_cap():
+    for i in range(web_module._SCAN_LOG_LIMIT + 5):
+        web_module._register_scan_log(f"eviction-test-{i}")
+    with web_module._scan_logs_lock:
+        assert len(web_module._scan_logs) <= web_module._SCAN_LOG_LIMIT
+        assert "eviction-test-0" not in web_module._scan_logs
+        assert f"eviction-test-{web_module._SCAN_LOG_LIMIT + 4}" in web_module._scan_logs
+
+
+def test_scan_post_registers_and_pushes_to_scan_log(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+
+    def fake_run_scan(cfg, log=None):
+        log("a log line during the scan")
+        from metascout.metadata.analyzer import analyze
+        return analyze([], targets=cfg.targets)
+
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={"targets": "example.com", "manual_urls": "", "engines": ["crawl"], "scan_id": "post-test-1"})
+
+    with web_module._scan_logs_lock:
+        assert "a log line during the scan" in web_module._scan_logs.get("post-test-1", [])

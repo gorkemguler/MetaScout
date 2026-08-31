@@ -330,9 +330,13 @@ to switch the whole page to Turkish (`EN`/`TR`, also reachable directly via
 targets empty and it'll derive them from the URLs), file extensions,
 discovery engines, the subdomain toggle, and the report language (English or
 Turkish, independent of the page's own language), then hit "Start scan".
-When the scan finishes, the report opens right in the browser; it's also
-saved under `--output-dir` (default `./metascout_output/web-<timestamp>/`)
-as `report.html`/`report.json`.
+While it's running, a live log box under the button streams the same
+progress lines you'd see in the terminal (documents found, engines queried,
+content-scan/visual-signature progress, ...) via server-sent events, so a
+long scan doesn't just look frozen behind a spinner. When the scan
+finishes, the report opens right in the browser; it's also saved under
+`--output-dir` (default `./metascout_output/web-<timestamp>/`) as
+`report.html`/`report.json`.
 
 ```bash
 metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output

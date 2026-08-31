@@ -1,16 +1,52 @@
 from __future__ import annotations
 
+import json
 import os
+import threading
+import time
 import webbrowser
 from datetime import datetime
 from urllib.parse import urlparse
 
-from flask import Flask, request
+from flask import Flask, Response, request, stream_with_context
 
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
 from .pipeline import run_local_document_scan, run_scan
 from .report import render_html_report, render_json_report
+
+# In-memory registry of live log lines per in-flight scan, so the browser can
+# stream them (via SSE, see /scan-log/<scan_id>) while the form's POST is
+# still synchronously running. Capped and lock-guarded — this is a local,
+# single-user dev tool, not a service, so a simple in-process dict is enough;
+# no need for a real job queue or persistent storage.
+_SCAN_LOG_LIMIT = 20
+_scan_logs: dict[str, list[str]] = {}
+_scan_logs_lock = threading.Lock()
+
+
+def _register_scan_log(scan_id: str) -> None:
+    if not scan_id:
+        return
+    with _scan_logs_lock:
+        _scan_logs[scan_id] = []
+        while len(_scan_logs) > _SCAN_LOG_LIMIT:
+            _scan_logs.pop(next(iter(_scan_logs)))
+
+
+def _push_scan_log(scan_id: str, message: str) -> None:
+    if not scan_id:
+        return
+    with _scan_logs_lock:
+        if scan_id in _scan_logs:
+            _scan_logs[scan_id].append(message)
+
+
+def _make_log_fn(scan_id: str):
+    def log(message: str) -> None:
+        print(f"[metascout web] {message}", flush=True)
+        _push_scan_log(scan_id, message)
+    return log
 
 _STRINGS = {
     "en": {
@@ -260,10 +296,15 @@ _PAGE_HEAD = """<!DOCTYPE html>
     font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 24px; }}
   button:hover {{ opacity: 0.9; }}
   button:disabled {{ opacity: 0.6; cursor: wait; }}
-  .scanning {{ display: none; align-items: center; gap: 10px; margin-top: 16px; color: var(--accent); font-size: 13px; }}
-  .scanning.active {{ display: flex; }}
+  .scanning {{ display: none; margin-top: 16px; }}
+  .scanning.active {{ display: block; }}
+  .scanning-row {{ display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: 13px; }}
   .spinner {{ width: 16px; height: 16px; border: 2px solid rgba(110,168,254,0.25); border-top-color: var(--accent);
-    border-radius: 50%; animation: spin 0.8s linear infinite; }}
+    border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }}
+  .log-box {{ margin: 10px 0 0; max-height: 220px; overflow-y: auto; background: #0a0c11;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    color: var(--muted); white-space: pre-wrap; word-break: break-word; }}
   @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
   .banner {{ color: #8bb4ff; font-weight: 800; font-size: 22px; }}
   .error {{ background: rgba(242,109,109,0.1); border: 1px solid var(--bad); color: var(--bad);
@@ -272,6 +313,25 @@ _PAGE_HEAD = """<!DOCTYPE html>
     border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; }}
   a {{ color: var(--accent); }}
 </style>
+<script>
+function metascoutStartScan() {{
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = btn.dataset.loading;
+  document.getElementById('scanning').className = 'scanning active';
+  var sid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
+  document.getElementById('scan_id').value = sid;
+  var logBox = document.getElementById('log-box');
+  try {{
+    var es = new EventSource('/scan-log/' + sid);
+    es.onmessage = function(e) {{
+      logBox.textContent += JSON.parse(e.data) + '\\n';
+      logBox.scrollTop = logBox.scrollHeight;
+    }};
+    es.onerror = function() {{ es.close(); }};
+  }} catch (err) {{ /* EventSource unsupported — spinner still shows, just no live log */ }}
+}}
+</script>
 </head>
 <body>
 <header>
@@ -300,8 +360,9 @@ _PAGE_TAIL = """
 _FORM_BODY = """
 {error_block}
 {exiftool_block}
-<form class="card" method="post" action="/scan" onsubmit="document.getElementById('submit-btn').disabled=true;document.getElementById('submit-btn').textContent='{submit_loading_label}';document.getElementById('scanning').className='scanning active';">
+<form class="card" method="post" action="/scan" onsubmit="metascoutStartScan();">
   <input type="hidden" name="ui_lang" value="{ui_lang}">
+  <input type="hidden" name="scan_id" id="scan_id" value="">
   <label for="targets">{targets_label}</label>
   <textarea id="targets" name="targets" placeholder="example.com&#10;example.org&#10;another-example.net">{targets_value}</textarea>
   <div class="hint">{targets_hint}</div>
@@ -367,8 +428,11 @@ _FORM_BODY = """
   </div>
   <div class="hint">{limits_hint}</div>
 
-  <button type="submit" id="submit-btn">{submit_label}</button>
-  <div class="scanning" id="scanning"><div class="spinner"></div> {scanning_hint}</div>
+  <button type="submit" id="submit-btn" data-loading="{submit_loading_label}">{submit_label}</button>
+  <div class="scanning" id="scanning">
+    <div class="scanning-row"><div class="spinner"></div> {scanning_hint}</div>
+    <pre class="log-box" id="log-box"></pre>
+  </div>
   <div class="hint">{footer_hint}</div>
 </form>
 """
@@ -469,8 +533,9 @@ _LOCAL_SCAN_FORM_BODY = """
 {error_block}
 {exiftool_block}
 <p class="hint" style="margin-bottom:20px;">{local_intro}</p>
-<form class="card" method="post" action="/local-scan" onsubmit="document.getElementById('submit-btn').disabled=true;document.getElementById('submit-btn').textContent='{submit_loading_label}';document.getElementById('scanning').className='scanning active';">
+<form class="card" method="post" action="/local-scan" onsubmit="metascoutStartScan();">
   <input type="hidden" name="ui_lang" value="{ui_lang}">
+  <input type="hidden" name="scan_id" id="scan_id" value="">
   <label for="local_dir">{local_dir_label}</label>
   <input type="text" id="local_dir" name="local_dir" placeholder="/Users/you/Downloads/reports" value="{local_dir_value}">
   <div class="hint">{local_dir_hint}</div>
@@ -504,8 +569,11 @@ _LOCAL_SCAN_FORM_BODY = """
     <label><input type="radio" name="report_lang" value="tr" {report_lang_tr_checked}> Türkçe</label>
   </div>
 
-  <button type="submit" id="submit-btn">{local_submit_label}</button>
-  <div class="scanning" id="scanning"><div class="spinner"></div> {scanning_hint}</div>
+  <button type="submit" id="submit-btn" data-loading="{submit_loading_label}">{local_submit_label}</button>
+  <div class="scanning" id="scanning">
+    <div class="scanning-row"><div class="spinner"></div> {scanning_hint}</div>
+    <pre class="log-box" id="log-box"></pre>
+  </div>
   <div class="hint">{footer_hint}</div>
 </form>
 """
@@ -638,8 +706,9 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             brave_api_key=os.environ.get("BRAVE_API_KEY"),
         )
 
-        def _log(message: str) -> None:
-            print(f"[metascout web] {message}", flush=True)
+        scan_id = request.form.get("scan_id", "")
+        _register_scan_log(scan_id)
+        _log = _make_log_fn(scan_id)
 
         _log(f"scan started: targets={targets} engines={engines} max_docs={max_docs} max_crawl_pages={max_crawl_pages}")
         try:
@@ -701,8 +770,9 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         run_dir = os.path.join(output_dir, "local-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-        def _log(message: str) -> None:
-            print(f"[metascout web] {message}", flush=True)
+        scan_id = request.form.get("scan_id", "")
+        _register_scan_log(scan_id)
+        _log = _make_log_fn(scan_id)
 
         try:
             if raw_local_dir:
@@ -735,6 +805,42 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         _log(f"local-scan finished: {len(findings.documents)} document(s), report saved to {run_dir}")
         return html
+
+    @app.get("/scan-log/<scan_id>")
+    def scan_log_stream(scan_id: str):
+        """Server-Sent Events stream of a running scan's log lines, so the
+        browser can show live progress while the /scan or /local-scan POST
+        (which the form submits to directly, and which blocks until the
+        scan finishes) is still in flight. The client opens this
+        concurrently with submitting the form — see metascoutStartScan() in
+        _PAGE_HEAD. Ends on its own once the client disconnects (e.g. the
+        page navigates away when the form's response finally arrives); the
+        idle cap below is just a safety net against an orphaned connection.
+        """
+        def generate():
+            sent = 0
+            idle_iterations = 0
+            max_idle_iterations = 3 * 60 * 60 * 2  # ~3h at 0.5s/iteration — generous, some scans are slow
+            while idle_iterations < max_idle_iterations:
+                with _scan_logs_lock:
+                    lines = _scan_logs.get(scan_id)
+                    if lines is None:
+                        return
+                    new_lines = lines[sent:]
+                    sent = len(lines)
+                if new_lines:
+                    idle_iterations = 0
+                    for line in new_lines:
+                        yield f"data: {json.dumps(line)}\n\n"
+                else:
+                    idle_iterations += 1
+                    if idle_iterations % 20 == 0:
+                        yield ": keep-alive\n\n"
+                time.sleep(0.5)
+        return Response(
+            stream_with_context(generate()), mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return app
 

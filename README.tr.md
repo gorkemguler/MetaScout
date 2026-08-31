@@ -330,9 +330,14 @@ tane), opsiyonel manuel URL listesini (bkz. [Manuel URL listesiyle tarama](#manu
 — hedefleri boş bırakırsanız URL'lerden otomatik çıkarılır), dosya
 uzantılarını, keşif motorlarını, subdomain seçeneğini ve rapor dilini
 (İngilizce/Türkçe, sayfanın kendi dilinden bağımsız) forma girip "Taramayı
-başlat"a basmanız yeterli. Tarama bitince sonuç raporu doğrudan tarayıcıda
-açılır; ayrıca `--output-dir` altına (varsayılan `./metascout_output/web-<tarih>/`)
-`report.html`/`report.json` olarak da kaydedilir.
+başlat"a basmanız yeterli. Tarama çalışırken, düğmenin altındaki canlı log
+kutusu terminaldeki ile aynı ilerleme satırlarını (bulunan belgeler,
+sorgulanan motorlar, içerik taraması/görsel imza ilerlemesi, ...)
+server-sent events ile akıtır — böylece uzun bir tarama sadece dönen bir
+spinner arkasında donmuş gibi görünmez. Tarama bitince sonuç raporu
+doğrudan tarayıcıda açılır; ayrıca `--output-dir` altına (varsayılan
+`./metascout_output/web-<tarih>/`) `report.html`/`report.json` olarak da
+kaydedilir.
 
 ```bash
 metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output
