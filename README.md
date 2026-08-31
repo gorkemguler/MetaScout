@@ -334,18 +334,32 @@ While it's running, a live log box under the button streams the same
 progress lines you'd see in the terminal (documents found, engines queried,
 content-scan/visual-signature progress, ...) via server-sent events, so a
 long scan doesn't just look frozen behind a spinner. When the scan
-finishes, the report opens right in the browser; it's also saved under
-`--output-dir` (default `./metascout_output/web-<timestamp>/`) as
-`report.html`/`report.json`.
+finishes, the report opens right in the browser with a **"Download results
+(.zip)"** button in the top-right corner — bundles that run's
+`report.html`, `report.json`, and every downloaded document into one zip,
+so getting the full output onto your own machine doesn't need filesystem
+access to wherever `metascout web` is actually running. The same files are
+also saved as-is under `--output-dir` (default
+`./metascout_output/web-<timestamp>/`).
 
 ```bash
 metascout web --port 9000 --output-dir ~/metascout-workspace/metascout_output
 ```
 
-The UI only listens on `127.0.0.1` (change with `--host`). Don't expose it to
-the internet. To use the `google`/`serper`/`brave` checkboxes, the matching API
-keys need to be set via environment variable or `.env` (see [Search engine API
+The UI only listens on `127.0.0.1` by default (change with `--host`). To
+use the `google`/`serper`/`brave` checkboxes, the matching API keys need to
+be set via environment variable or `.env` (see [Search engine API
 keys](#search-engine-api-keys-optional)).
+
+> ⚠️ **This has no authentication, at all.** Fine for one person on their
+> own machine (the default). If you're tempted to run `metascout web
+> --host 0.0.0.0` so a team can share one instance: don't, not directly —
+> anyone who can reach it can start scans (against any target they choose,
+> using your server/IP) and download every other run's results, including
+> ones containing real PII if `--scan-content` was used. Put it behind
+> something that actually authenticates users first — a reverse proxy with
+> basic auth, a Tailscale/WireGuard-only network, an SSO-aware gateway —
+> before letting more than one trusted person reach it.
 
 **"Scan Existing Documents"** (top nav) is a second, separate page for a
 different case: you already have documents — your own files, or ones

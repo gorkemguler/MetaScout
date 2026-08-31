@@ -252,3 +252,58 @@ def test_scan_post_registers_and_pushes_to_scan_log(tmp_path):
 
     with web_module._scan_logs_lock:
         assert "a log line during the scan" in web_module._scan_logs.get("post-test-1", [])
+
+
+def _run_scan_and_extract_run_id(client) -> str:
+    import re
+    with patch("metascout.web.run_scan") as mock_run_scan:
+        from metascout.metadata.analyzer import analyze
+        mock_run_scan.side_effect = lambda cfg, log=None: analyze([], targets=cfg.targets)
+        resp = client.post("/scan", data={"targets": "example.com", "manual_urls": "", "engines": ["crawl"]})
+    match = re.search(r'/download/([\w-]+)', resp.get_data(as_text=True))
+    assert match, "expected a download link in the report HTML"
+    return match.group(1)
+
+
+def test_scan_report_includes_a_working_download_link(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    run_id = _run_scan_and_extract_run_id(client)
+
+    resp = client.get(f"/download/{run_id}")
+    assert resp.status_code == 200
+    assert resp.mimetype == "application/zip"
+
+    import io
+    import zipfile
+    zf = zipfile.ZipFile(io.BytesIO(resp.data))
+    names = zf.namelist()
+    assert f"{run_id}/report.html" in names
+    assert f"{run_id}/report.json" in names
+
+
+def test_download_rejects_path_traversal_attempts(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    for bad_id in ("..", ".", "..%2f..%2fetc", "a/b", "a%2Fb"):
+        resp = client.get(f"/download/{bad_id}")
+        assert resp.status_code == 404, f"expected 404 for {bad_id!r}, got {resp.status_code}"
+
+
+def test_download_404s_for_unknown_run_id(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    resp = client.get("/download/no-such-run-anywhere")
+    assert resp.status_code == 404
+
+
+def test_download_cannot_escape_output_dir_via_sibling_prefix(tmp_path):
+    # A run directory name that happens to share output_dir's prefix
+    # (e.g. output_dir="./metascout_output", a sibling "./metascout_output_evil")
+    # must not be reachable through naive string-prefix comparisons.
+    app = create_app(output_dir=str(tmp_path / "metascout_output"))
+    client = app.test_client()
+    (tmp_path / "metascout_output_evil").mkdir()
+    (tmp_path / "metascout_output_evil" / "secret.txt").write_text("nope")
+    resp = client.get("/download/../metascout_output_evil")
+    assert resp.status_code == 404

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import threading
 import time
 import webbrowser
+import zipfile
 from datetime import datetime
 from urllib.parse import urlparse
 
-from flask import Flask, Response, request, stream_with_context
+from flask import Flask, Response, abort, request, send_file, stream_with_context
 
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
@@ -721,7 +723,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             ), 500
 
         os.makedirs(run_dir, exist_ok=True)
-        html = render_html_report(findings, lang=report_lang)
+        run_id = os.path.basename(run_dir)
+        html = render_html_report(findings, lang=report_lang, download_url=f"/download/{run_id}")
         with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
             fh.write(html)
         with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
@@ -797,7 +800,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             ), 500
 
         os.makedirs(run_dir, exist_ok=True)
-        html = render_html_report(findings, lang=report_lang)
+        run_id = os.path.basename(run_dir)
+        html = render_html_report(findings, lang=report_lang, download_url=f"/download/{run_id}")
         with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
             fh.write(html)
         with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
@@ -840,6 +844,36 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         return Response(
             stream_with_context(generate()), mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/download/<run_id>")
+    def download_results(run_id: str):
+        """Zips one run's whole output directory (report.html, report.json,
+        downloads/) and serves it as a single file — the "Download results"
+        button on the report page. `run_id` is always server-generated (the
+        run directory's own basename, e.g. "web-20260101-120000"), but it's
+        still validated defensively here since it arrives back as untrusted
+        user input on this request.
+        """
+        base = os.path.realpath(output_dir)
+        if not run_id or run_id in (".", "..") or "/" in run_id or "\\" in run_id:
+            abort(404)
+        run_path = os.path.realpath(os.path.join(base, run_id))
+        if run_path != base and not run_path.startswith(base + os.sep):
+            abort(404)
+        if not os.path.isdir(run_path):
+            abort(404)
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _, files in os.walk(run_path):
+                for name in files:
+                    full = os.path.join(root, name)
+                    zf.write(full, arcname=os.path.join(run_id, os.path.relpath(full, run_path)))
+        buffer.seek(0)
+        return send_file(
+            buffer, mimetype="application/zip", as_attachment=True,
+            download_name=f"metascout-{run_id}.zip",
         )
 
     return app

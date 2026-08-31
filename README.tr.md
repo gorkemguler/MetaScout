@@ -335,18 +335,33 @@ kutusu terminaldeki ile aynı ilerleme satırlarını (bulunan belgeler,
 sorgulanan motorlar, içerik taraması/görsel imza ilerlemesi, ...)
 server-sent events ile akıtır — böylece uzun bir tarama sadece dönen bir
 spinner arkasında donmuş gibi görünmez. Tarama bitince sonuç raporu
-doğrudan tarayıcıda açılır; ayrıca `--output-dir` altına (varsayılan
-`./metascout_output/web-<tarih>/`) `report.html`/`report.json` olarak da
-kaydedilir.
+doğrudan tarayıcıda açılır, sağ üstte bir **"Sonuçları indir (.zip)"**
+butonuyla — o taramanın `report.html`, `report.json` ve indirilen her
+belgesini tek bir zip'te toplar, böylece tam çıktıyı kendi makinenize
+almak için `metascout web`'in gerçekte çalıştığı yere dosya sistemi
+erişimi gerekmez. Aynı dosyalar olduğu gibi `--output-dir` altına da
+(varsayılan `./metascout_output/web-<tarih>/`) kaydedilir.
 
 ```bash
 metascout web --port 9000 --output-dir ~/MetaScout-Calisma/metascout_output
 ```
 
-Arayüz yalnızca `127.0.0.1` üzerinde dinler (`--host` ile değiştirilebilir).
-İnternete açık bırakmayın. `google`/`serper`/`brave` motorlarını forma işaretlemek
-için ilgili API anahtarlarının ortam değişkeni ya da `.env` üzerinden tanımlı
-olması gerekir (bkz. [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
+Arayüz varsayılan olarak yalnızca `127.0.0.1` üzerinde dinler (`--host`
+ile değiştirilebilir). `google`/`serper`/`brave` motorlarını forma
+işaretlemek için ilgili API anahtarlarının ortam değişkeni ya da `.env`
+üzerinden tanımlı olması gerekir (bkz. [Arama motoru API
+anahtarları](#arama-motoru-api-anahtarları-opsiyonel)).
+
+> ⚠️ **Bunun hiç kimlik doğrulaması yok, hiç.** Kendi makinenizde tek
+> kişi için sorun değil (varsayılan kullanım). Bir ekip tek bir örneği
+> paylaşsın diye `metascout web --host 0.0.0.0` çalıştırmak isterseniz:
+> doğrudan yapmayın — buna erişebilen herkes (kendi seçtiği herhangi bir
+> hedefe karşı, sizin sunucunuzu/IP'nizi kullanarak) tarama başlatabilir
+> ve `--scan-content` kullanılmışsa gerçek PII içerenler dahil, başka
+> herkesin tarama sonuçlarını indirebilir. Birden fazla güvenilir kişinin
+> erişmesine izin vermeden önce, gerçekten kullanıcı doğrulayan bir şeyin
+> arkasına koyun — basic auth'lu bir reverse proxy, sadece
+> Tailscale/WireGuard üzerinden erişim, SSO destekli bir gateway gibi.
 
 **"Mevcut Belgeleri Tara"** (üst navigasyon) farklı bir durum için ikinci,
 ayrı bir sayfa: zaten belgeleriniz var — kendi dosyalarınız ya da başka bir
