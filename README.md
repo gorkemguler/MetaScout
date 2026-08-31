@@ -37,6 +37,7 @@
 - [Scanning multiple targets](#scanning-multiple-targets)
 - [Scanning a manual URL list](#scanning-a-manual-url-list)
 - [Web UI](#web-ui)
+- [Docker (web UI)](#docker-web-ui)
 - [Wayback Machine discovery](#wayback-machine-discovery)
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
@@ -369,6 +370,57 @@ or a URL list (downloaded directly, no discovery), plus optional
 content-scan and visual-signature checks, same as the main form. It's kept
 on its own page rather than crammed into the main form specifically to keep
 that one from getting harder to read as more scan options get added.
+
+## Docker (web UI)
+
+For running the web UI without setting up Python/ExifTool/ImageMagick/
+Ghostscript by hand, or for putting it somewhere other than your own
+laptop:
+
+```bash
+git clone https://github.com/gorkemguler/metascout.git
+cd metascout
+docker build -t metascout .
+docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
+```
+
+Or with `docker-compose.yml` (included in the repo):
+
+```bash
+docker compose up --build
+```
+
+Either way, `http://localhost:8765` on your machine reaches the container's
+web UI once it's running, and every scan's output (`report.html`,
+`report.json`, `downloads/`) lands in `./metascout_output` on the host
+through the volume mount — persisted across container restarts, and
+reachable without `docker exec`-ing into the container.
+
+The image bundles **everything**, including the optional `content-scan`
+and `visual-signature` extras (ImageMagick + Ghostscript included) — no
+separate `pip install` step needed inside the container. That's a real
+tradeoff: the image is meaningfully bigger than a bare `pip install
+metascout` because of it (see [Visual (wet) signature
+detection](#visual-wet-signature-detection--experimental-separately-opt-in)
+for why those two alone add real weight), traded for genuinely working out
+of the box.
+
+API keys (`GOOGLE_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY`, ...) work the
+same way as everywhere else in this project — copy `.env.example` to `.env`,
+fill in what you have, and either pass `--env-file .env` to `docker run` or
+uncomment the `env_file:` line in `docker-compose.yml`.
+
+> ⚠️ **Same warning as the [Web UI](#web-ui) section, worth repeating here
+> because Docker is exactly where people reach for `--host 0.0.0.0`:** this
+> image has no authentication built in. The `docker run`/compose examples
+> above bind the published port to `127.0.0.1` on the host on purpose —
+> only reachable from the machine running the container. If you're
+> deploying this somewhere other people should reach (a shared server, a
+> cloud VM), put an authenticating reverse proxy in front of it first;
+> don't just publish the port to `0.0.0.0` or a public interface. Anyone
+> who can reach an unauthenticated instance can start scans against
+> whatever target they choose using your server, and download every
+> previous run's results — PII included, if `--scan-content` was used.
 
 ## Wayback Machine discovery
 

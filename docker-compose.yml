@@ -1,0 +1,21 @@
+# docker compose up --build
+#
+# Port is bound to 127.0.0.1 on the host on purpose — the web UI has no
+# authentication at all. Only change the "127.0.0.1:8765" side if you've
+# put something in front of this that actually authenticates users (a
+# reverse proxy with basic auth, a Tailscale/WireGuard-only network, an
+# SSO gateway, ...) — see the README's Docker / Web UI sections.
+services:
+  metascout:
+    build: .
+    image: metascout:latest
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ./metascout_output:/data
+    # Optional: GOOGLE_API_KEY / GOOGLE_CSE_ID / SERPER_API_KEY / BRAVE_API_KEY
+    # for the google/serper/brave discovery engines. Copy .env.example to
+    # .env and fill in what you have; uncomment below to use it.
+    # env_file:
+    #   - .env
+    restart: unless-stopped

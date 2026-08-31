@@ -1,6 +1,6 @@
 [project]
 name = "metascout"
-version = "0.1.1"
+version = "0.1.2"
 description = "Open-source, cross-platform document discovery and metadata reconnaissance tool (FOCA alternative)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,7 +35,7 @@ content-scan = [
     "phonenumbers>=8.13",
 ]
 
-# Opt-in *visual* signature detection (--scan-content --visual-signature):
+# Opt-in *visual* signature detection (--visual-signature):
 # looks for handwritten-signature-shaped ink blobs in rasterized page images
 # (catches a wet signature with no text layer at all), via the unmaintained-
 # since-2022 `signature-detect` package. Kept as its own extra, separate

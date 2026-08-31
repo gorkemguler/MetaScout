@@ -37,6 +37,7 @@
 - [Çoklu hedef taraması](#çoklu-hedef-taraması)
 - [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 - [Web arayüzü](#web-arayüzü)
+- [Docker (web arayüzü)](#docker-web-arayüzü)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
@@ -371,6 +372,59 @@ listesi (doğrudan indirilir, keşif yok) verin, artı isteğe bağlı içerik
 taraması ve görsel imza kontrolleri, ana form ile aynı. Bunu bilerek ayrı
 bir sayfada tuttuk, ana forma sıkıştırmak yerine — çünkü ana form zaten daha
 fazla tarama seçeneği eklendikçe okunması zorlaşıyordu.
+
+## Docker (web arayüzü)
+
+Python/ExifTool/ImageMagick/Ghostscript'i elle kurmadan web arayüzünü
+çalıştırmak için, ya da kendi bilgisayarınız dışında bir yere koymak
+istiyorsanız:
+
+```bash
+git clone https://github.com/gorkemguler/metascout.git
+cd metascout
+docker build -t metascout .
+docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
+```
+
+Ya da repoda hazır bulunan `docker-compose.yml` ile:
+
+```bash
+docker compose up --build
+```
+
+Her iki yöntemde de, konteyner çalıştıktan sonra kendi makinenizde
+`http://localhost:8765` adresinden web arayüzüne ulaşırsınız, ve her
+taramanın çıktısı (`report.html`, `report.json`, `downloads/`) volume
+mount sayesinde host'ta `./metascout_output` içine düşer — konteyner
+yeniden başlasa bile kalıcıdır, ve konteynere `docker exec` girmeden
+erişilebilir.
+
+İmaj **her şeyi** paketliyor, isteğe bağlı `content-scan` ve
+`visual-signature` eklentileri dahil (ImageMagick + Ghostscript de
+içeride) — konteyner içinde ayrı bir `pip install` adımı gerekmiyor.
+Bu gerçek bir ödünleşim: imaj, sade bir `pip install metascout`'tan
+belirgin şekilde daha büyük (bu ikisinin neden gerçekten ağırlık
+kattığı için bkz. [Görsel (ıslak) imza
+tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)), ama
+karşılığında gerçekten kutudan çıktığı gibi çalışıyor.
+
+API anahtarları (`GOOGLE_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY`, ...)
+projenin başka her yerindeki gibi çalışır — `.env.example`'ı `.env`'e
+kopyalayıp elinizdekileri doldurun, sonra ya `docker run`'a `--env-file .env`
+verin ya da `docker-compose.yml`'deki `env_file:` satırının yorumunu kaldırın.
+
+> ⚠️ **[Web arayüzü](#web-arayüzü) bölümündeki uyarının aynısı, burada
+> tekrarlamaya değer çünkü insanların `--host 0.0.0.0`'a en çok
+> başvurduğu yer tam olarak Docker:** bu imajda hiç kimlik doğrulama yok.
+> Yukarıdaki `docker run`/compose örnekleri, yayınlanan portu bilerek
+> host'ta `127.0.0.1`'e bağlıyor — sadece konteyneri çalıştıran makineden
+> erişilebilir. Bunu başkalarının erişmesi gereken bir yere (paylaşılan
+> bir sunucu, bulut VM'i) koyuyorsanız, önce kimlik doğrulayan bir
+> reverse proxy koyun; portu doğrudan `0.0.0.0`'a ya da genel bir arayüze
+> yayınlamayın. Kimlik doğrulamasız bir örneğe erişebilen herkes, sizin
+> sunucunuzu kullanarak seçtiği herhangi bir hedefe karşı tarama
+> başlatabilir ve önceki her taramanın sonucunu indirebilir — `--scan-content`
+> kullanıldıysa PII dahil.
 
 ## Wayback Machine keşfi
 
