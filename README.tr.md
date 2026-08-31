@@ -386,11 +386,32 @@ docker build -t metascout .
 docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
 ```
 
-Ya da repoda hazır bulunan `docker-compose.yml` ile:
+Bu, konteyneri ön planda çalıştırır (`--rm` durduğu an — ör. Ctrl+C ile —
+konteyneri siler) — denemek için iyi. Arka planda sürekli çalışsın,
+çökerse ya da makine yeniden başlarsa kendiliğinden geri gelsin
+istiyorsanız, `--rm`'i kaldırıp yerine `-d --restart unless-stopped`
+ekleyin:
 
 ```bash
-docker compose up --build
+docker run -d --name metascout --restart unless-stopped \
+  -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
 ```
+
+Ya da repoda hazır bulunan `docker-compose.yml` ile (`restart:
+unless-stopped` zaten ayarlı) — aynı şekilde arka planda çalıştırmak için
+`-d` ekleyin:
+
+```bash
+docker compose up -d --build
+```
+
+> `--restart unless-stopped`, Docker'ın kendisi tekrar çalışmaya
+> başladığında *konteynerin* geri gelmesini sağlar — Docker'ın kendisinin
+> önyüklemede (boot) başlamasını sağlamaz. Bu, projenin dışında bir kerelik
+> bir ayar: Docker Desktop'ta "Start Docker Desktop when you sign in"
+> tercihi var (macOS/Windows); Linux'ta `sudo systemctl enable docker`
+> daemon için aynısını yapar. Bunu bir kez yaptıktan sonra, yukarıdaki
+> konteyner yeniden başlatma politikası her reboot'ta işi devralır.
 
 Her iki yöntemde de, konteyner çalıştıktan sonra kendi makinenizde
 `http://localhost:8765` adresinden web arayüzüne ulaşırsınız, ve her

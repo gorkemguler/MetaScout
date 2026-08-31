@@ -384,11 +384,31 @@ docker build -t metascout .
 docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
 ```
 
-Or with `docker-compose.yml` (included in the repo):
+That runs it in the foreground (`--rm` cleans the container up the moment
+it stops, e.g. Ctrl+C) — good for trying it out. To leave it running in
+the background, and have it come back on its own if it crashes or the
+machine reboots, drop `--rm` and add `-d --restart unless-stopped`
+instead:
 
 ```bash
-docker compose up --build
+docker run -d --name metascout --restart unless-stopped \
+  -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
 ```
+
+Or with `docker-compose.yml` (included in the repo, `restart:
+unless-stopped` already set) — add `-d` the same way to run it detached:
+
+```bash
+docker compose up -d --build
+```
+
+> `--restart unless-stopped` makes *the container* come back once Docker
+> itself is running again — it doesn't make Docker itself start at boot.
+> That's a one-time setting outside this project: Docker Desktop has a
+> "Start Docker Desktop when you sign in" preference (macOS/Windows); on
+> Linux, `sudo systemctl enable docker` does the equivalent for the
+> daemon. Do that once, and the container restart policy above takes it
+> from there on every reboot.
 
 Either way, `http://localhost:8765` on your machine reaches the container's
 web UI once it's running, and every scan's output (`report.html`,
