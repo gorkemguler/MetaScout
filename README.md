@@ -69,6 +69,9 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **Operating system** hints
 - **Internal file paths** (`C:\Users\...`, network shares)
 - **Server / printer names** (UNC paths, `\\server\share`)
+- **GPS coordinates**, when a photo with location EXIF data (e.g. a phone
+  photo pasted into a Word doc) is embedded in a document — a link to view
+  it on a map is included in the report
 
 ## Features
 

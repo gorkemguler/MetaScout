@@ -15,6 +15,11 @@ DUPLICATE_SUFFIX_RE = re.compile(r"\s*\(\d+\)$")
 USERNAME_FIELDS = {"author", "creator", "lastmodifiedby", "lastauthor", "ownername", "owner"}
 SOFTWARE_FIELDS = {"producer", "creatortool", "software", "application", "programname", "generator", "xcreatortool"}
 PRINTER_HINT = "printer"
+# exiftool's own composite tag combines lat+lon+direction into one clean
+# string (e.g. "41.015137 N, 28.979530 E", given -c "%.6f" in the wrapper)
+# whenever GPS EXIF data exists on an embedded photo — a phone photo pasted
+# into a Word doc is the classic real-world source of this.
+GPS_POSITION_FIELD = "gpsposition"
 
 GENERIC_VALUES = {"", "unknown", "administrator", "user", "n/a", "-", "none", "guest", "root"}
 
@@ -99,5 +104,8 @@ def analyze(documents: list[DocumentMetadata], targets: list[str]) -> ScanFindin
 
             if PRINTER_HINT in tag_name_clean:
                 _add(findings.servers_and_printers, value.strip(), doc.url, tag_name)
+
+            if tag_name_clean == GPS_POSITION_FIELD:
+                _add(findings.geolocation, value.strip(), doc.url, tag_name)
 
     return findings

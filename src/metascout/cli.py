@@ -48,6 +48,7 @@ def _print_summary(findings) -> None:
         ("Operating systems", findings.operating_systems),
         ("Internal paths", findings.internal_paths),
         ("Servers / printers", findings.servers_and_printers),
+        ("Geolocation (GPS)", findings.geolocation),
     ]:
         table.add_row(label, str(len(bucket)))
     console.print(table)

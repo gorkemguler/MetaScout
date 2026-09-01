@@ -84,6 +84,10 @@ class ScanFindings:
     operating_systems: dict[str, Finding] = field(default_factory=dict)
     internal_paths: dict[str, Finding] = field(default_factory=dict)
     servers_and_printers: dict[str, Finding] = field(default_factory=dict)
+    # GPS coordinates from embedded photos (e.g. a phone photo pasted into a
+    # Word doc) — a classic FOCA-style finding: metadata leaking someone's
+    # physical location, not just software/username info.
+    geolocation: dict[str, Finding] = field(default_factory=dict)
     content_findings: list[ContentFinding] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 

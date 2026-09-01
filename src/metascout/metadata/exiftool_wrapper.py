@@ -14,7 +14,13 @@ def exiftool_available() -> bool:
 
 
 def _run_exiftool_batch(paths: list[str], timeout: int) -> list[dict]:
-    cmd = ["exiftool", "-j", "-a", "-G1", "-api", "largefilesupport=1", *paths]
+    # -c "%.6f": print GPS coordinates as plain decimal degrees (e.g.
+    # "41.015137 N, 28.979530 E" in Composite:GPSPosition) instead of
+    # exiftool's default DMS string — only affects coordinate formatting,
+    # every other tag stays in its normal human-readable form (unlike the
+    # global -n flag, which would also turn OS/software enum tags numeric
+    # and break the analyzer's string-matching logic for those).
+    cmd = ["exiftool", "-j", "-a", "-G1", "-c", "%.6f", "-api", "largefilesupport=1", *paths]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:

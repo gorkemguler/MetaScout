@@ -70,6 +70,9 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **İşletim sistemi** ipuçları
 - **İç dosya yolları** (`C:\Users\...`, ağ paylaşımları)
 - **Sunucu / yazıcı isimleri** (UNC yolları, `\\server\share`)
+- **GPS koordinatları**, konum bilgisi içeren bir fotoğraf (ör. bir
+  belgeye yapıştırılmış telefon fotoğrafı) belgeye gömülüyse — raporda
+  haritada görüntüleme linki de sunulur
 
 ## Özellikler
 

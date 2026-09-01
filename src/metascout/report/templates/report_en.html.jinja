@@ -141,12 +141,12 @@
       <span class="meta-item">Target{{ "s" if findings.targets | length > 1 else "" }}: <strong>{{ findings.targets | join(", ") }}</strong></span>
       <span class="meta-item">Scanned: <strong>{{ findings.scanned_at.strftime("%Y-%m-%d %H:%M") }} UTC</strong></span>
       <span class="meta-item">Documents scanned: <strong>{{ findings.documents | length }}</strong></span>
-      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length %}
+      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length %}
       {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length %}
       {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
       {% if total_findings == 0 and not findings.content_findings %}
         <span class="badge badge-none">No Findings</span>
-      {% elif critical_content_hits > 0 %}
+      {% elif critical_content_hits > 0 or findings.geolocation %}
         <span class="badge badge-high">High Risk</span>
       {% elif sensitive_hits == 0 and not findings.content_findings %}
         <span class="badge badge-low">Low Risk</span>
@@ -178,6 +178,11 @@
           No direct username/email/server leaks were detected; findings are mostly
           software and operating system information.
         {% endif %}
+        {% if findings.geolocation %}
+          <strong>{{ findings.geolocation | length }} GPS location(s)</strong> were also
+          found embedded in photos pasted into documents — see
+          <a href="#geolocation">Geolocation</a> below.
+        {% endif %}
         {% if findings.content_findings %}
           A separate, opt-in content scan of document body text additionally found
           <strong>{{ findings.content_findings | length }}</strong> potential personal/critical-data
@@ -197,6 +202,9 @@
       <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6.5" rx="1.5"/><rect x="3" y="13.5" width="18" height="6.5" rx="1.5"/><circle cx="7" cy="7.25" r="0.9" fill="currentColor" stroke="none"/><circle cx="7" cy="16.75" r="0.9" fill="currentColor" stroke="none"/></svg></div><div class="num">{{ findings.servers_and_printers | length }}</div><div class="label">Servers / printers</div></div>
       <div class="card"><div class="icon ic-e"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div><div class="num">{{ findings.documents | length }}</div><div class="label">Documents found</div></div>
       <div class="card"><div class="icon ic-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><div class="num">{{ findings.documents_with_metadata }}</div><div class="label">With metadata</div></div>
+      {% if findings.geolocation %}
+      <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg></div><div class="num">{{ findings.geolocation | length }}</div><div class="label">GPS locations</div></div>
+      {% endif %}
       {% if findings.content_findings %}
       <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16.5h.01"/></svg></div><div class="num">{{ findings.content_findings | length }}</div><div class="label">Content scan hits</div></div>
       {% endif %}
@@ -294,6 +302,33 @@
       </div>
       {{ finding_table(findings.servers_and_printers, "Server / printer") }}
     </section>
+    {% if findings.geolocation %}
+    <section id="geolocation">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg></div>
+        <h2>Geolocation (GPS)</h2>
+        <span class="n">{{ findings.geolocation | length }}</span>
+      </div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Coordinates</th><th>Docs</th><th>Found in</th><th></th></tr></thead>
+        <tbody>
+        {% for value, f in findings.geolocation.items() | sort %}
+          <tr>
+            <td class="value">{{ value }}</td>
+            <td class="count">{{ f.document_urls | length }}</td>
+            <td class="doclist">
+              {% for u in f.document_urls[:3] %}<a href="{{ u }}" target="_blank" rel="noopener">{{ u | truncate(50) }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+              {% if f.document_urls | length > 3 %}<span> +{{ f.document_urls | length - 3 }} more</span>{% endif %}
+            </td>
+            <td><a href="https://www.google.com/maps?q={{ value | urlencode }}" target="_blank" rel="noopener">View on map</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+    {% endif %}
 
     {% if findings.content_findings %}
     <section id="content-scan">
