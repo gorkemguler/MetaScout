@@ -8,7 +8,7 @@ DEFAULT_FILETYPES = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", 
 # content_scan/ package. Off by default: this reads inside each document's
 # body text looking for PII, which is a materially different (and more
 # invasive) thing than the always-on metadata-tag scan.
-DEFAULT_CONTENT_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature"]
+DEFAULT_CONTENT_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature", "secrets"]
 
 # User-Agent identifies the tool honestly rather than spoofing a browser,
 # so target site operators can see recon traffic in their logs and block it if unwanted.

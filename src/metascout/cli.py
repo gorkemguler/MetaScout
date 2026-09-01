@@ -154,12 +154,13 @@ def main() -> None:
 @click.option(
     "--scan-content/--no-scan-content", default=False,
     help="Also scan each downloaded document's body text (not just metadata) for personal/critical data: "
-    "national ID numbers, emails/phones, IBANs/card numbers, address/DOB hints, and signature hints. "
+    "national ID numbers, emails/phones, IBANs/card numbers, address/DOB hints, signature hints, and "
+    "leaked credentials (AWS/GitHub/Slack/Stripe keys, private key blocks, DB connection strings, JWTs). "
     "Off by default — heuristic, and requires the optional extra: pip install 'metascout[content-scan]'.",
 )
 @click.option(
     "--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True,
-    help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature. Only used with --scan-content.",
+    help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature,secrets. Only used with --scan-content.",
 )
 @click.option(
     "--visual-signature/--no-visual-signature", default=False,
@@ -333,7 +334,7 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
 @click.argument("directory", type=click.Path(exists=True, file_okay=False))
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions to look for in DIRECTORY.")
 @click.option("--scan-content/--no-scan-content", default=False, help="Also scan document body text for PII (see --content-categories). Requires pip install 'metascout[content-scan]'.")
-@click.option("--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True, help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature. Only used with --scan-content.")
+@click.option("--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True, help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature,secrets. Only used with --scan-content.")
 @click.option("--visual-signature/--no-visual-signature", default=False, help="EXPERIMENTAL: also run the slow, heuristic, image-based signature check. Requires pip install 'metascout[visual-signature]' plus ImageMagick and Ghostscript installed system-wide.")
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)

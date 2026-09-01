@@ -23,7 +23,12 @@ class RawMatch:
 def _mask_middle(s: str, keep_start: int, keep_end: int) -> str:
     if len(s) <= keep_start + keep_end:
         return "*" * len(s)
-    return s[:keep_start] + "*" * (len(s) - keep_start - keep_end) + s[-keep_end:]
+    # s[-0:] is the whole string, not "nothing" (there's no negative zero in
+    # Python indexing) — keep_end=0 has to be handled explicitly, or a
+    # "masked" value silently comes back with the raw secret appended at
+    # the end, undoing the masking entirely.
+    tail = s[-keep_end:] if keep_end > 0 else ""
+    return s[:keep_start] + "*" * (len(s) - keep_start - keep_end) + tail
 
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -59,6 +64,29 @@ _ADDRESS_RE = re.compile(
 SIGNATURE_KEYWORDS = [
     "imza", "imzalayan", "ıslak imza", "e-imza", "elektronik imza",
     "signature", "signed by", "wet signature", "digitally signed", "digital signature",
+]
+
+# Leaked credentials/secrets accidentally left in a document's body text —
+# e.g. a config snippet pasted into a "setup notes" doc, or a screenshot's
+# OCR'd text. Each entry is (label, compiled pattern, chars to keep visible
+# from the start when masking). Deliberately prefix/format-specific (no
+# generic "any 40-char base64 string" patterns, no entropy scoring) to keep
+# the false-positive rate low — the tradeoff is these only catch well-known
+# credential formats, not custom/homegrown ones.
+_SECRET_PATTERNS: list[tuple[str, re.Pattern[str], int]] = [
+    ("AWS Access Key ID", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), 4),
+    ("Google API Key", re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"), 4),
+    ("GitHub Personal Access Token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36}\b"), 4),
+    ("GitHub Fine-Grained Token", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"), 11),
+    ("Slack Token", re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,72}\b"), 5),
+    ("Stripe API Key", re.compile(r"\b[sp]k_live_[0-9A-Za-z]{16,}\b"), 8),
+    ("Private Key Block", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----"), 0),
+    (
+        "Database Connection String",
+        re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s:/@'\"]+:[^\s@'\"]+@[^\s/'\"]+"),
+        0,
+    ),
+    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{10,}\b"), 12),
 ]
 
 _IBAN_LETTERS = {chr(65 + i): str(10 + i) for i in range(26)}
@@ -165,6 +193,29 @@ def find_address_hints(text: str) -> list[RawMatch]:
     for m in _ADDRESS_RE.finditer(text):
         val = m.group().strip()
         out.append(RawMatch("address", val, val, m.start(), m.end()))
+    return out
+
+
+def find_secrets(text: str) -> list[RawMatch]:
+    """Scans for well-known credential/secret formats leaked into a
+    document's body text (a config snippet pasted into a notes doc,
+    OCR'd screenshot text, ...). Each hit is masked before it's ever
+    returned — the raw secret value never leaves this function.
+    """
+    out: list[RawMatch] = []
+    for label, pattern, keep_start in _SECRET_PATTERNS:
+        for m in pattern.finditer(text):
+            raw = m.group()
+            if label == "Private Key Block":
+                masked = "-----BEGIN PRIVATE KEY----- (contents not shown)"
+            elif label == "Database Connection String":
+                scheme, _, rest = raw.partition("://")
+                user, _, host_part = rest.partition(":")
+                _, _, host = host_part.partition("@")
+                masked = f"{scheme}://{user}:****@{host}"
+            else:
+                masked = _mask_middle(raw, keep_start, 0)
+            out.append(RawMatch(f"secret:{label}", raw, masked, m.start(), m.end()))
     return out
 
 

@@ -344,7 +344,8 @@
         "address": "Adres (ipucu)", "signature": "İmza ipucu",
       } %}
       {% for category, hits in findings.content_findings_by_category.items() | sort %}
-      <h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px;">{{ category_labels.get(category, category) }} <span class="n">{{ hits | length }}</span></h3>
+      {% set display_label = "Sızmış Kimlik Bilgisi: " ~ category.split(":", 1)[1] if category.startswith("secret:") else category_labels.get(category, category) %}
+      <h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px;">{{ display_label }} <span class="n">{{ hits | length }}</span></h3>
       <div class="table-scroll">
       <table>
         <thead><tr><th>Değer</th><th>Bağlam</th><th>Belge</th></tr></thead>

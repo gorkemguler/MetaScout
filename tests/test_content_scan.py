@@ -108,6 +108,81 @@ def test_find_signature_keywords_english():
     assert "digitally signed" in {m.masked for m in matches}
 
 
+# ---- secret/credential detection --------------------------------------------
+
+def test_mask_middle_does_not_leak_raw_value_when_keep_end_is_zero():
+    # Regression: s[-0:] is the whole string in Python (no negative zero),
+    # so masking with keep_end=0 used to silently append the raw secret
+    # back onto the end of what was supposed to be the masked value.
+    masked = pii._mask_middle("AKIAIOSFODNN7EXAMPLE", 4, 0)
+    assert masked == "AKIA****************"
+    assert "IOSFODNN7EXAMPLE" not in masked
+
+
+def test_find_secrets_aws_access_key():
+    matches = pii.find_secrets("export AWS_KEY=AKIAIOSFODNN7EXAMPLE")
+    assert len(matches) == 1
+    assert matches[0].category == "secret:AWS Access Key ID"
+    assert matches[0].masked == "AKIA****************"
+    assert "IOSFODNN7EXAMPLE" not in matches[0].masked
+
+
+def test_find_secrets_google_api_key():
+    key = "AIza" + "Sy0abcdefghijklmnopqrstuvwxyz012345"[:35]
+    matches = pii.find_secrets(f"key = {key}")
+    assert len(matches) == 1
+    assert matches[0].category == "secret:Google API Key"
+    assert key not in matches[0].masked
+
+
+def test_find_secrets_github_pat():
+    matches = pii.find_secrets("token: ghp_1234567890abcdefghijklmnopqrstuvwxyz")
+    assert matches[0].category == "secret:GitHub Personal Access Token"
+
+
+def test_find_secrets_private_key_block_never_shows_raw_content():
+    text = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----"
+    matches = pii.find_secrets(text)
+    assert len(matches) == 1
+    assert matches[0].category == "secret:Private Key Block"
+    assert "contents not shown" in matches[0].masked
+    assert "MIIEpAIBAAKCAQEA" not in matches[0].masked
+
+
+def test_find_secrets_db_connection_string_masks_password_only():
+    matches = pii.find_secrets("DB_URL=postgres://admin:SuperSecret123@db.internal.example.com:5432/prod")
+    assert len(matches) == 1
+    masked = matches[0].masked
+    assert "SuperSecret123" not in masked
+    assert "admin" in masked  # username isn't secret, kept for context
+    assert "db.internal.example.com" in masked
+
+
+def test_find_secrets_jwt():
+    token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+    matches = pii.find_secrets(f"Authorization: Bearer {token}")
+    assert matches[0].category == "secret:JWT"
+    assert token not in matches[0].masked
+
+
+def test_find_secrets_no_false_positive_on_ordinary_text():
+    assert pii.find_secrets("This is just a normal sentence about a report, nothing secret here.") == []
+
+
+def test_scan_document_includes_secrets_only_when_requested(tmp_path):
+    from metascout.content_scan import scan_document as scan_doc
+    p = tmp_path / "notes.txt"
+    p.write_text("irrelevant")
+    text = "AWS key: AKIAIOSFODNN7EXAMPLE"
+    with patch("metascout.content_scan.extract_text", return_value=text), \
+            patch("metascout.content_scan.has_pdf_digital_signature", return_value=False):
+        no_secrets = scan_doc(str(p), "txt", categories={"tc_kimlik"})
+        with_secrets = scan_doc(str(p), "txt", categories={"secrets"})
+    assert no_secrets == []
+    assert len(with_secrets) == 1
+    assert with_secrets[0].category == "secret:AWS Access Key ID"
+
+
 # ---- text extraction --------------------------------------------------------
 
 def _write_zip(path, files: dict):

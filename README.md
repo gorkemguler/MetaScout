@@ -534,6 +534,7 @@ data:
 | `iban_card` | IBANs (any ISO 13616 country, not just Turkey) and card numbers | High — mod-97 (IBAN) / Luhn (card) checksum-validated |
 | `address_dob` | Address-like and date-of-birth-like text patterns | **Low** — regex heuristics, expect false positives |
 | `signature` | "imza"/"signature"/"signed by"-style keywords in the text, **and** whether a PDF has an actual cryptographic signature field (`/Sig`) | Keyword hits are a hint, not proof; the structural `/Sig` check is reliable |
+| `secrets` | Leaked credentials in the document body: AWS access keys, Google API keys, GitHub/Slack/Stripe tokens, PEM private key blocks, DB connection strings (`postgres://user:pass@host`), JWTs | High — matched against well-known credential *formats*, not generic entropy scoring, so it only catches known providers' key shapes |
 
 It's off by default, opt-in, and heuristic — every hit is something to
 **verify manually**, not a confirmed leak the way a metadata finding is.
@@ -743,7 +744,7 @@ metascout visual-signature-scan --help
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Can also be set via env var or `.env` |
 | `--ddgs-backend` | `auto` | Backend(s) for the `ddgs` engine, e.g. `duckduckgo`, `google`, `bing`, or a comma-separated list |
 | `--scan-content` / `--no-scan-content` | off | Also scan document body text for PII (see [Content scanning](#content-scanning-for-personal-data-optional)); needs `pip install 'metascout[content-scan]'` |
-| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature` | Comma-separated subset, only used with `--scan-content` |
+| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature,secrets` | Comma-separated subset, only used with `--scan-content` |
 | `--visual-signature` / `--no-visual-signature` | off | **EXPERIMENTAL**, independent of `--scan-content`: visual (image-based) signature detection; slow (see [above](#visual-wet-signature-detection--experimental-separately-opt-in)), needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
