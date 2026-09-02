@@ -86,10 +86,11 @@ _STRINGS = {
         "content_scan_label": "Scan document content for personal/critical data (PII)",
         "content_scan_hint": "Off by default. Goes beyond metadata tags and reads each document's "
                               "actual body text for national ID numbers, emails/phones, IBANs/card "
-                              "numbers, address/DOB hints, signature hints, and leaked credentials "
-                              "(API keys, private keys, DB connection strings, JWTs). Heuristic — "
-                              "every hit needs manual verification, not a confirmed leak. Requires "
-                              "the optional extra on the machine running the scan: "
+                              "numbers, address/DOB hints, signature hints, leaked credentials "
+                              "(API keys, private keys, DB connection strings, JWTs), and leaked "
+                              "infrastructure info (cloud storage links, internal hostnames/IPs). "
+                              "Heuristic — every hit needs manual verification, not a confirmed leak. "
+                              "Requires the optional extra on the machine running the scan: "
                               "<code>pip install 'metascout[content-scan]'</code>.",
         "content_categories_label": "Categories",
         "cat_tc_kimlik": "TR national ID no. (checksum-verified)",
@@ -98,6 +99,7 @@ _STRINGS = {
         "cat_address_dob": "Address / date-of-birth hints (weak signal)",
         "cat_signature": "Signature hints (keyword + PDF digital signature)",
         "cat_secrets": "Leaked credentials (AWS/GitHub/Slack/Stripe keys, private keys, DB strings, JWTs)",
+        "cat_infra": "Leaked infrastructure info (cloud storage/file-share links, internal hostnames/private IPs)",
         "visual_signature_label": "EXPERIMENTAL: also try visual (wet) signature detection",
         "visual_signature_hint": "Independent of content scanning above — works with or without it. "
                                   "Looks for a handwritten-signature-shaped ink blob in the actual page "
@@ -180,8 +182,9 @@ _STRINGS = {
         "content_scan_label": "Belge içeriğinde kişisel/kritik veri taraması (PII)",
         "content_scan_hint": "Varsayılan kapalı. Metadata etiketlerinin ötesine geçip her belgenin "
                               "gövde metnini TC kimlik no, e-posta/telefon, IBAN/kredi kartı no, "
-                              "adres/doğum tarihi ipuçları, imza ipuçları ve sızmış kimlik bilgileri "
-                              "(API anahtarları, private key, DB bağlantı string'i, JWT) için tarar. "
+                              "adres/doğum tarihi ipuçları, imza ipuçları, sızmış kimlik bilgileri "
+                              "(API anahtarları, private key, DB bağlantı string'i, JWT) ve sızmış "
+                              "altyapı bilgisi (cloud storage linkleri, iç hostname/IP) için tarar. "
                               "Sezgisel bir taramadır — her bulgu kesin bir sızıntı değil, elle doğrulanmalıdır. "
                               "Taramayı çalıştıran makinede opsiyonel ek paket gerektirir: "
                               "<code>pip install 'metascout[content-scan]'</code>.",
@@ -192,6 +195,7 @@ _STRINGS = {
         "cat_address_dob": "Adres / doğum tarihi ipuçları (zayıf sinyal)",
         "cat_signature": "İmza ipuçları (anahtar kelime + PDF dijital imza)",
         "cat_secrets": "Sızmış kimlik bilgileri (AWS/GitHub/Slack/Stripe anahtarları, private key, DB bağlantı string'i, JWT)",
+        "cat_infra": "Sızmış altyapı bilgisi (cloud storage/paylaşım linkleri, iç hostname/özel IP)",
         "visual_signature_label": "DENEYSEL: görsel (ıslak) imza tespitini de dene",
         "visual_signature_hint": "Yukarıdaki içerik taramasından bağımsız — onunla ya da onsuz çalışır. "
                                   "Sayfa görüntüsünde el yazısı imza şeklinde bir mürekkep lekesi arar, "
@@ -412,6 +416,7 @@ _FORM_BODY = """
     <label><input type="checkbox" name="content_categories" value="address_dob" checked> {cat_address_dob}</label>
     <label><input type="checkbox" name="content_categories" value="signature" checked> {cat_signature}</label>
     <label><input type="checkbox" name="content_categories" value="secrets" checked> {cat_secrets}</label>
+    <label><input type="checkbox" name="content_categories" value="infra" checked> {cat_infra}</label>
   </div>
 
   <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
@@ -511,6 +516,7 @@ def _render_form(
         cat_address_dob=_t(ui_lang, "cat_address_dob"),
         cat_signature=_t(ui_lang, "cat_signature"),
         cat_secrets=_t(ui_lang, "cat_secrets"),
+        cat_infra=_t(ui_lang, "cat_infra"),
         visual_signature_label=_t(ui_lang, "visual_signature_label"),
         visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
@@ -567,6 +573,7 @@ _LOCAL_SCAN_FORM_BODY = """
     <label><input type="checkbox" name="content_categories" value="address_dob" checked> {cat_address_dob}</label>
     <label><input type="checkbox" name="content_categories" value="signature" checked> {cat_signature}</label>
     <label><input type="checkbox" name="content_categories" value="secrets" checked> {cat_secrets}</label>
+    <label><input type="checkbox" name="content_categories" value="infra" checked> {cat_infra}</label>
   </div>
 
   <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
@@ -629,6 +636,7 @@ def _render_local_form(
         cat_address_dob=_t(ui_lang, "cat_address_dob"),
         cat_signature=_t(ui_lang, "cat_signature"),
         cat_secrets=_t(ui_lang, "cat_secrets"),
+        cat_infra=_t(ui_lang, "cat_infra"),
         visual_signature_label=_t(ui_lang, "visual_signature_label"),
         visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),

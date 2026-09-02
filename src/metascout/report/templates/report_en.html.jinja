@@ -341,6 +341,7 @@
         "tc_kimlik": "TR National ID No.", "email": "Email", "phone": "Phone",
         "iban": "IBAN", "credit_card": "Credit Card No.", "dob": "Date of Birth (hint)",
         "address": "Address (hint)", "signature": "Signature hint",
+        "cloud_storage": "Cloud Storage / File-Share Link", "internal_host": "Internal Hostname / Private IP",
       } %}
       {% for category, hits in findings.content_findings_by_category.items() | sort %}
       {% set display_label = "Leaked Credential: " ~ category.split(":", 1)[1] if category.startswith("secret:") else category_labels.get(category, category) %}

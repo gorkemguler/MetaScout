@@ -544,6 +544,7 @@ arar:
 | `address_dob` | Adres benzeri ve doğum-tarihi-benzeri metin kalıpları | **Düşük** — regex sezgisi, yanlış pozitif bekleyin |
 | `signature` | Metinde "imza"/"signature"/"signed by" gibi anahtar kelimeler, **ve** PDF'in gerçek bir kriptografik imza alanı (`/Sig`) olup olmadığı | Anahtar kelime bulguları ipucudur, kanıt değil; yapısal `/Sig` kontrolü güvenilirdir |
 | `secrets` | Belge gövdesinde sızmış kimlik bilgileri: AWS access key, Google API anahtarı, GitHub/Slack/Stripe token'ları, PEM private key blokları, DB bağlantı string'leri (`postgres://user:pass@host`), JWT'ler | Yüksek — genel entropy skorlaması yerine bilinen sağlayıcıların gerçek anahtar *formatlarına* karşı eşleştirilir, bu yüzden sadece bilinen formatları yakalar |
+| `infra` | Belge gövdesinde sızmış altyapı bilgisi: cloud storage/paylaşım linkleri (S3, GCS, Azure Blob, Drive, Dropbox, SharePoint), ve iç ağ topolojisi — RFC 1918 özel IP'ler ve `.local`/`.internal`/`.corp`/`.lan` hostname'leri | Orta — eşleşen link/IP gerçek, ama varlığı kaynağın gerçekten yanlış yapılandırılmış/açık olduğunu kanıtlamaz; yine de elle kontrol gerekir |
 
 Varsayılan kapalı, isteğe bağlı ve sezgiseldir — her bulgu **elle
 doğrulanması** gereken bir şeydir, metadata bulgusu gibi kesin bir sızıntı
@@ -759,7 +760,7 @@ metascout visual-signature-scan --help
 | `--google-api-key`, `--google-cse-id`, `--serper-api-key`, `--brave-api-key` | – | Ortam değişkeni veya `.env` ile de verilebilir |
 | `--ddgs-backend` | `auto` | `ddgs` motoru için motor(lar), ör. `duckduckgo`, `google`, `bing` ya da virgülle ayrılmış liste |
 | `--scan-content` / `--no-scan-content` | kapalı | Belge gövde metnini de PII için tarar (bkz. [Kişisel veri içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)); `pip install 'metascout[content-scan]'` gerekir |
-| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature,secrets` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
+| `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature,secrets,infra` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
 | `--visual-signature` / `--no-visual-signature` | kapalı | **DENEYSEL**, `--scan-content`'ten bağımsız: görsel (görüntü tabanlı) imza tespiti; yavaş (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)), `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript gerektirir |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |

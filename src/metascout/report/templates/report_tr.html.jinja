@@ -342,6 +342,7 @@
         "tc_kimlik": "TC Kimlik No", "email": "E-posta", "phone": "Telefon",
         "iban": "IBAN", "credit_card": "Kredi Kartı No", "dob": "Doğum Tarihi (ipucu)",
         "address": "Adres (ipucu)", "signature": "İmza ipucu",
+        "cloud_storage": "Cloud Storage / Paylaşım Linki", "internal_host": "İç Hostname / Özel IP",
       } %}
       {% for category, hits in findings.content_findings_by_category.items() | sort %}
       {% set display_label = "Sızmış Kimlik Bilgisi: " ~ category.split(":", 1)[1] if category.startswith("secret:") else category_labels.get(category, category) %}

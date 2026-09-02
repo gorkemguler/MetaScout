@@ -12,7 +12,7 @@ PHONENUMBERS_AVAILABLE = pii.PHONENUMBERS_AVAILABLE
 # to one or more of the fine-grained pii_patterns detectors; ContentFinding
 # itself always carries the fine-grained category (email/phone/tc_kimlik/...)
 # regardless of which group turned it on, so the report can group precisely.
-ALL_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature", "secrets"]
+ALL_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature", "secrets", "infra"]
 
 _CONTEXT_RADIUS = 30
 
@@ -80,6 +80,9 @@ def scan_document(local_path: str, filetype: str, *, categories: set[str]) -> li
         matches += pii.find_address_hints(text)
     if "secrets" in categories:
         matches += pii.find_secrets(text)
+    if "infra" in categories:
+        matches += pii.find_cloud_links(text)
+        matches += pii.find_internal_hosts(text)
 
     for m in matches:
         findings.append(ContentFinding(

@@ -183,6 +183,79 @@ def test_scan_document_includes_secrets_only_when_requested(tmp_path):
     assert with_secrets[0].category == "secret:AWS Access Key ID"
 
 
+# ---- cloud storage / internal infra detection --------------------------------
+
+def test_find_cloud_links_s3_bucket():
+    matches = pii.find_cloud_links("Backup at https://my-backups.s3.amazonaws.com/2024/db.sql.gz")
+    assert len(matches) == 1
+    assert matches[0].category == "cloud_storage"
+    assert matches[0].raw == "https://my-backups.s3.amazonaws.com/2024/db.sql.gz"
+    assert matches[0].masked == matches[0].raw  # shown unmasked, the URL is the finding
+
+
+def test_find_cloud_links_s3_uri_scheme():
+    matches = pii.find_cloud_links("see s3://internal-data-lake/raw/events/")
+    assert matches[0].raw == "s3://internal-data-lake/raw/events/"
+
+
+def test_find_cloud_links_dropbox_keeps_file_extension():
+    matches = pii.find_cloud_links("shared via https://www.dropbox.com/scl/fi/abc123xyz/report.pdf")
+    assert matches[0].raw == "https://www.dropbox.com/scl/fi/abc123xyz/report.pdf"
+
+
+def test_find_cloud_links_google_drive_and_gcs():
+    text = (
+        "https://drive.google.com/file/d/1a2B3c4D5e/view and "
+        "https://storage.googleapis.com/my-bucket-prod/exports/data.csv"
+    )
+    matches = pii.find_cloud_links(text)
+    raws = {m.raw for m in matches}
+    assert "https://storage.googleapis.com/my-bucket-prod/exports/data.csv" in raws
+    assert any(r.startswith("https://drive.google.com/file/d/1a2B3c4D5e") for r in raws)
+
+
+def test_find_cloud_links_no_false_positive_on_ordinary_url():
+    assert pii.find_cloud_links("See https://example.com/reports/2023.pdf for details") == []
+
+
+def test_find_internal_hosts_private_ip_ranges():
+    text = "staging at 10.20.30.40, admin at 192.168.1.1, docker at 172.20.0.5"
+    matches = pii.find_internal_hosts(text)
+    raws = {m.raw for m in matches}
+    assert raws == {"10.20.30.40", "192.168.1.1", "172.20.0.5"}
+    assert all(m.category == "internal_host" for m in matches)
+
+
+def test_find_internal_hosts_does_not_match_public_ip():
+    assert pii.find_internal_hosts("public DNS at 8.8.8.8") == []
+
+
+def test_find_internal_hosts_internal_domain_suffixes():
+    text = "wiki at wiki.acme.local, vpn at vpn.internal.acme.corp"
+    matches = pii.find_internal_hosts(text)
+    raws = {m.raw for m in matches}
+    assert "wiki.acme.local" in raws
+    assert "vpn.internal.acme.corp" in raws
+
+
+def test_find_internal_hosts_no_false_positive_on_public_domain():
+    assert pii.find_internal_hosts("visit example.com or www.google.com") == []
+
+
+def test_scan_document_includes_infra_only_when_requested(tmp_path):
+    from metascout.content_scan import scan_document as scan_doc
+    p = tmp_path / "notes.txt"
+    p.write_text("irrelevant")
+    text = "internal db at 10.0.0.5, backup at https://my-bucket.s3.amazonaws.com/x"
+    with patch("metascout.content_scan.extract_text", return_value=text), \
+            patch("metascout.content_scan.has_pdf_digital_signature", return_value=False):
+        no_infra = scan_doc(str(p), "txt", categories={"tc_kimlik"})
+        with_infra = scan_doc(str(p), "txt", categories={"infra"})
+    assert no_infra == []
+    categories_found = {f.category for f in with_infra}
+    assert categories_found == {"cloud_storage", "internal_host"}
+
+
 # ---- text extraction --------------------------------------------------------
 
 def _write_zip(path, files: dict):

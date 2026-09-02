@@ -58,6 +58,42 @@ _ADDRESS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Cloud storage / file-sharing links pasted into a document's body — a real
+# recon finding when the bucket/share turns out to be misconfigured (public,
+# no auth). Shown unmasked, unlike the secrets above: the URL itself is the
+# finding, not something dangerous to display.
+_CLOUD_STORAGE_RE = re.compile(
+    r"\bhttps?://(?:"
+    r"[a-z0-9.\-]+\.s3(?:[.\-][a-z0-9\-]+)?\.amazonaws\.com(?:/[^\s\"'<>]*)?"
+    r"|s3(?:[.\-][a-z0-9\-]+)?\.amazonaws\.com/[a-z0-9.\-]+(?:/[^\s\"'<>]*)?"
+    r"|storage\.googleapis\.com/[a-z0-9._\-]+(?:/[^\s\"'<>]*)?"
+    r"|[a-z0-9.\-]+\.blob\.core\.windows\.net(?:/[^\s\"'<>]*)?"
+    r"|drive\.google\.com/(?:file/d/|drive/folders/|open\?id=)[A-Za-z0-9_\-]+"
+    r"|www\.dropbox\.com/scl?/[^\s\"'<>]+"
+    r"|[a-z0-9.\-]+\.sharepoint\.com/[^\s\"'<>]+"
+    r"|onedrive\.live\.com/[^\s\"'<>]+"
+    r")",
+    re.IGNORECASE,
+)
+_CLOUD_URI_RE = re.compile(r"\b(?:s3|gs)://[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9](?:/[^\s\"'<>]*)?", re.IGNORECASE)
+
+# RFC 1918 private ranges + loopback — leaked internal network topology.
+_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+_PRIVATE_IP_RE = re.compile(
+    rf"\b(?:10\.{_OCTET}\.{_OCTET}\.{_OCTET}"
+    rf"|172\.(?:1[6-9]|2\d|3[01])\.{_OCTET}\.{_OCTET}"
+    rf"|192\.168\.{_OCTET}\.{_OCTET}"
+    rf"|127\.{_OCTET}\.{_OCTET}\.{_OCTET})\b"
+)
+# Hostnames ending in a non-public-DNS TLD-like suffix — a classic sign of
+# leaked internal infrastructure naming (e.g. a hostname pasted into a
+# "how to connect" doc that was never meant to leave the company).
+_INTERNAL_HOSTNAME_RE = re.compile(
+    r"\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,}"
+    r"(?:local|internal|corp|lan|intranet|home\.arpa)\b",
+    re.IGNORECASE,
+)
+
 # Multilingual (TR/EN) signature hints — presence only, not a claim that the
 # document is actually validly signed. Kept lowercase to match the lowered
 # search text below.
@@ -193,6 +229,37 @@ def find_address_hints(text: str) -> list[RawMatch]:
     for m in _ADDRESS_RE.finditer(text):
         val = m.group().strip()
         out.append(RawMatch("address", val, val, m.start(), m.end()))
+    return out
+
+
+def find_cloud_links(text: str) -> list[RawMatch]:
+    """Cloud storage / file-sharing links pasted into a document — flags the
+    bucket/share for a manual check (is it actually public?), doesn't try
+    to determine that itself. Shown unmasked: the URL is the finding.
+    """
+    out = []
+    for m in _CLOUD_STORAGE_RE.finditer(text):
+        val = m.group()
+        out.append(RawMatch("cloud_storage", val, val, m.start(), m.end()))
+    for m in _CLOUD_URI_RE.finditer(text):
+        val = m.group()
+        out.append(RawMatch("cloud_storage", val, val, m.start(), m.end()))
+    return out
+
+
+def find_internal_hosts(text: str) -> list[RawMatch]:
+    """Private IPs and internal-looking hostnames (.local/.internal/.corp/
+    .lan/...) leaked into document text — internal network topology that
+    shouldn't be in a publicly reachable document. Shown unmasked: the
+    value itself (not sensitive on its own) is the finding.
+    """
+    out = []
+    for m in _PRIVATE_IP_RE.finditer(text):
+        val = m.group()
+        out.append(RawMatch("internal_host", val, val, m.start(), m.end()))
+    for m in _INTERNAL_HOSTNAME_RE.finditer(text):
+        val = m.group()
+        out.append(RawMatch("internal_host", val, val, m.start(), m.end()))
     return out
 
 
