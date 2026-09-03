@@ -37,7 +37,8 @@
 - [Çoklu hedef taraması](#çoklu-hedef-taraması)
 - [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 - [Web arayüzü](#web-arayüzü)
-- [Docker (web arayüzü)](#docker-web-arayüzü)
+- [REST API](#rest-api-opsiyonel)
+- [Docker](#docker)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
@@ -401,10 +402,102 @@ doğrudan CLI'dan da kullanılabilir:
 metascout diff metascout_output/web-20260101-100000 metascout_output/web-20260201-100000
 ```
 
-## Docker (web arayüzü)
+## REST API (opsiyonel)
+
+Yukarıdaki CLI ve web arayüzü, elle tarama yapan bir insan içindir.
+`metascout api`, bunun yerine bir *programın* bunu yapması için üçüncü,
+ayrı bir arayüz — kendi uygulamanızdan/pipeline'ınızdan bir tarama başlatın,
+durumunu sorgulayın, sonucu (JSON rapor, HTML rapor, ya da tüm çalıştırmanın
+zip'i) gerçekten istediğiniz yere aktarın: bir SIEM'e, bir talebe (ticket),
+dahili bir dashboard'a, zamanlanmış bir işe — entegrasyon neyi
+gerektiriyorsa.
+
+```bash
+pip install 'metascout[api]'
+metascout api
+```
+
+Bu, `http://127.0.0.1:8000` üzerinde bir REST API başlatır — etkileşimli,
+otomatik üretilmiş dokümantasyonla (Swagger UI) birlikte,
+`http://127.0.0.1:8000/docs` adresinde: her istek/yanıt alanı, doğrudan
+tarayıcıdan denenebilir, elle senkron tutulacak ayrı bir API referansı yok.
+`/openapi.json`, aynısını makine tarafından okunabilir bir şema olarak verir
+— kurumsal uygulamanızın kullandığı dilde bir istemci üretmek için.
+
+**İş (job) tabanlıdır**, tek bir bloklayan çağrı değil: bir tarama saniyeler
+ile saatler arasında herhangi bir sürebilir, bu yüzden `POST /v1/scans`
+tüm çalıştırma boyunca HTTP bağlantısını açık tutmak yerine hemen bir
+`job_id` ile döner — `status` `"done"` (ya da `"error"`) olana kadar `GET
+/v1/scans/{job_id}`'yi sorgulayın, sonra sonucu al.
+
+```bash
+# Tarama başlat
+curl -s -X POST http://127.0.0.1:8000/v1/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"targets": ["example.com"], "scan_content": true, "critical_files": true}'
+# -> {"job_id": "…", "status": "queued", "links": {...}, ...}
+
+# Bitene kadar sorgula
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>
+
+# status "done" olunca:
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>/report.json
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>/report.html
+curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
+```
+
+| Endpoint | Açıklama |
+|---|---|
+| `GET /v1/health` | Canlılık kontrolü + versiyon + o an çalışan/kuyrukta job sayısı |
+| `POST /v1/scans` | Tarama başlatır — `metascout scan` ile aynı seçenekler (targets/manual_urls, filetypes, engines, scan_content, critical_files, ...) bir JSON gövde olarak |
+| `POST /v1/local-scans` | Sunucudaki yerel bir dizinin ya da sabit bir URL listesinin taramasını başlatır — `metascout local-scan` ile aynı |
+| `GET /v1/scans` | Job'ları listeler (en yeniden eskiye), güncel durumlarıyla |
+| `GET /v1/scans/{job_id}` | Bir job'ın durumu, zaman damgaları ve bitince bir bulgu özeti |
+| `GET /v1/scans/{job_id}/log` | O ana kadar toplanan ilerleme log satırları (hâlâ çalışırken de işler) |
+| `GET /v1/scans/{job_id}/report.json` | Tam JSON rapor — henüz bitmemişse 409 |
+| `GET /v1/scans/{job_id}/report.html` | Tam HTML rapor — henüz bitmemişse 409 |
+| `GET /v1/scans/{job_id}/download` | Tüm çalıştırmanın zip'i (raporlar + indirilen belgeler) — henüz bitmemişse 409 |
+
+`metascout api` seçenekleri:
+
+| Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `--host` | `127.0.0.1` | Başka makinelerden bağlantı kabul etmek için `0.0.0.0` kullanın — önce aşağıdaki uyarıyı okuyun |
+| `--port` | `8000` | Dinlenecek port |
+| `--output-dir` | `./metascout_output` | Her job'ın `report.json`/`report.html`/`downloads/`'unun kaydedileceği yer (job başına bir alt klasör, CLI/web arayüzüyle aynı düzen) |
+| `--max-workers` | `2` | Aynı anda gerçekten çalışan azami tarama sayısı; fazlası kuyruğa girip sırasını bekler |
+
+Job takibi (durum, devam eden log satırları) **sadece bellekte** tutulur —
+sunucu yeniden başlatıldığında kaybolur. Bitmiş bir job'ın
+`report.json`/`report.html`'i yine de `--output-dir` altına diskte güvenle
+yazılır, tam olarak CLI/web arayüzündeki gibi — bu yüzden bir yeniden
+başlatma asla **tamamlanmış** bir sonucu kaybettirmez, sadece o an
+kuyrukta/çalışmakta olan işlerin canlı durumunu.
+
+> ⚠️ **Kimlik doğrulama yerleşik değil**, [Web arayüzü](#web-arayüzü) ve
+> [Docker](#docker) imajıyla aynı duruş: kendi makinenizde ya da güvenilir
+> bir ağın içinde olduğu gibi sorun değil, ama buna erişebilen herkes
+> sunucunuzu kullanarak seçtiği herhangi bir hedefe karşı tarama
+> başlatabilir ve `--scan-content` kullanılmışsa PII dahil her job'ın
+> sonucunu çekebilir. Güvenilir bir ağ dışından herhangi bir şeyin
+> erişmesine izin vermeden önce, çağıranları gerçekten doğrulayan bir şeyin
+> arkasına koyun — API key'li ya da mTLS'li bir reverse proxy, sadece
+> Tailscale/WireGuard üzerinden erişim, bir API gateway. `--host 0.0.0.0`
+> tek başına **hiçbir** kimlik doğrulama eklemez.
+
+**Canlı uçtan uca doğrulandı**: `metascout api`'yi gerçekten çalıştırdım
+(sadece FastAPI'nin process-içi test istemcisine karşı değil), sahte bir
+AWS anahtarı içeren `.env` bulunan bir dizin için HTTP üzerinden bir
+local-scan job'ı `POST`ladım, `GET /v1/scans/{job_id}`'yi `"done"`'a kadar
+sorguladım, ve anahtarın `report.json`'da doğru şekilde maskelenmiş
+geldiğini doğruladım — artı `report.html`, zip indirme, ve `/docs`'taki
+Swagger UI'ın hepsi gerçek bir tarayıcıda kontrol edildi.
+
+## Docker
 
 Python/ExifTool/ImageMagick/Ghostscript'i elle kurmadan web arayüzünü
-çalıştırmak için, ya da kendi bilgisayarınız dışında bir yere koymak
+(ya da yukarıdaki [REST API](#rest-api-opsiyonel)'yi) çalıştırmak için, ya da
+kendi bilgisayarınız dışında bir yere koymak
 istiyorsanız:
 
 ```bash
@@ -474,6 +567,18 @@ verin ya da `docker-compose.yml`'deki `env_file:` satırının yorumunu kaldır�
 > sunucunuzu kullanarak seçtiği herhangi bir hedefe karşı tarama
 > başlatabilir ve önceki her taramanın sonucunu indirebilir — `--scan-content`
 > kullanıldıysa PII dahil.
+
+Aynı imajın içine `api` eki de gömülü — web arayüzü yerine REST API'yi
+çalıştırmak için `CMD`'yi geçersiz kılın:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$(pwd)/metascout_output:/data" metascout \
+  api --host 0.0.0.0 --port 8000 --output-dir /data
+```
+
+Bkz. yukarıdaki [REST API](#rest-api-opsiyonel) — orada da aynı "host'ta
+`127.0.0.1`'e bağla, daha fazla açmadan önce kimlik doğrulayan bir proxy
+koy" uyarısı geçerli.
 
 ## Wayback Machine keşfi
 
@@ -838,6 +943,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
@@ -881,6 +987,15 @@ metascout diff --help
 | `--port` | `8765` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Taramaların kaydedileceği klasör |
 | `--open-browser` / `--no-open-browser` | açık | Başlarken tarayıcıyı otomatik aç |
+
+`metascout api` seçenekleri — bkz. yukarıdaki [REST API](#rest-api-opsiyonel):
+
+| Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `--host` | `127.0.0.1` | Başka makinelerden bağlantı kabul etmek için `0.0.0.0` kullanın — önce yukarıdaki uyarıyı okuyun |
+| `--port` | `8000` | Dinlenecek port |
+| `--output-dir` | `./metascout_output` | Her job'ın rapor/indirmelerinin kaydedileceği yer |
+| `--max-workers` | `2` | Aynı anda çalışan azami tarama sayısı |
 
 `metascout local-scan DIRECTORY` — `DIRECTORY`'de (özyinelemeli aranır)
 zaten bulunan belgeleri analiz eder: keşif yok, indirme yok, sadece
@@ -967,8 +1082,12 @@ src/metascout/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor
 ├── diff.py                  iki report.json çıktısını karşılaştırır (yeni/kaldırılmış belge, bulgu, içerik sonucu)
-├── pipeline.py              discover → download → extract → analyze akışı (CLI ve web'in ortak motoru)
-├── cli.py                   click tabanlı `scan` / `web` / `local-scan` / `visual-signature-scan` / `diff` komutları
+├── api/                      opsiyonel REST API servisi (`metascout api`), web.py'dan ayrı
+│   ├── app.py               FastAPI uygulaması + route'lar (job tabanlı: POST başlatır, GET sorgular/getirir)
+│   ├── jobs.py               bellek-içi job kaydı + pipeline'ı çalıştıran arka plan thread havuzu
+│   └── schemas.py            Pydantic istek/yanıt modelleri (otomatik üretilen /docs'u da besler)
+├── pipeline.py              discover → download → extract → analyze akışı (CLI, web ve api'nin ortak motoru)
+├── cli.py                   click tabanlı `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 

@@ -64,6 +64,20 @@ ocr = [
     "Pillow>=10.0",
 ]
 
+# Opt-in REST API service (`metascout api`): a separate, job-based HTTP
+# service (FastAPI + uvicorn) wrapping the same discover -> download ->
+# extract -> analyze pipeline as the CLI/web UI, for programmatic/enterprise
+# integration — start a scan, poll its status, pull the JSON/HTML report or
+# a zip once it's done. Kept out of the core install: most users only need
+# the CLI or the local single-user web UI, not a network-facing service.
+# No built-in authentication (see api/app.py and the README) — same
+# "don't expose this without a reverse proxy in front of it" posture as
+# `metascout web`, just written for a machine caller instead of a browser.
+api = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
 [project.scripts]
 metascout = "metascout.cli:main"
 

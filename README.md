@@ -37,7 +37,8 @@
 - [Scanning multiple targets](#scanning-multiple-targets)
 - [Scanning a manual URL list](#scanning-a-manual-url-list)
 - [Web UI](#web-ui)
-- [Docker (web UI)](#docker-web-ui)
+- [REST API](#rest-api-optional)
+- [Docker](#docker)
 - [Wayback Machine discovery](#wayback-machine-discovery)
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
@@ -396,11 +397,100 @@ at all:
 ```bash
 metascout diff metascout_output/web-20260101-100000 metascout_output/web-20260201-100000
 ```
-## Docker (web UI)
 
-For running the web UI without setting up Python/ExifTool/ImageMagick/
-Ghostscript by hand, or for putting it somewhere other than your own
-laptop:
+## REST API (optional)
+
+The CLI and the web UI above are both for a person running scans by hand.
+`metascout api` is a third, separate interface for a *program* to do
+that instead — start a scan from your own app/pipeline, poll it, and pull
+the result (JSON report, HTML report, or a zip of the whole run) into
+wherever you actually want it: a SIEM, a ticket, an internal dashboard,
+a scheduled job, whatever the integration needs.
+
+```bash
+pip install 'metascout[api]'
+metascout api
+```
+
+This starts a REST API on `http://127.0.0.1:8000` with interactive,
+auto-generated docs (Swagger UI) at `http://127.0.0.1:8000/docs` — every
+request/response field, tried straight from the browser, no separate API
+reference to keep in sync by hand. `/openapi.json` gives the same thing as
+a machine-readable schema, for generating a client in whatever language your
+enterprise app uses.
+
+It's **job-based**, not a single blocking call: a scan can take anywhere
+from seconds to hours, so `POST /v1/scans` returns immediately with a
+`job_id` instead of holding the HTTP connection open for the whole run —
+poll `GET /v1/scans/{job_id}` until `status` is `"done"` (or `"error"`),
+then fetch the result.
+
+```bash
+# Start a scan
+curl -s -X POST http://127.0.0.1:8000/v1/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"targets": ["example.com"], "scan_content": true, "critical_files": true}'
+# -> {"job_id": "…", "status": "queued", "links": {...}, ...}
+
+# Poll until done
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>
+
+# Once status is "done":
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>/report.json
+curl -s http://127.0.0.1:8000/v1/scans/<job_id>/report.html
+curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
+```
+
+| Endpoint | Description |
+|---|---|
+| `GET /v1/health` | Liveness check + version + count of currently running/queued jobs |
+| `POST /v1/scans` | Start a scan — same options as `metascout scan` (targets/manual_urls, filetypes, engines, scan_content, critical_files, ...) as a JSON body |
+| `POST /v1/local-scans` | Start a scan of a server-local directory or a fixed URL list — same as `metascout local-scan` |
+| `GET /v1/scans` | List jobs (newest first) with their current status |
+| `GET /v1/scans/{job_id}` | One job's status, timestamps, and a findings summary once done |
+| `GET /v1/scans/{job_id}/log` | Progress log lines collected so far (works while still running) |
+| `GET /v1/scans/{job_id}/report.json` | The full JSON report — 409 if not done yet |
+| `GET /v1/scans/{job_id}/report.html` | The full HTML report — 409 if not done yet |
+| `GET /v1/scans/{job_id}/download` | Zip of the whole run (reports + downloaded documents) — 409 if not done yet |
+
+`metascout api` options:
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `127.0.0.1` | Use `0.0.0.0` to accept connections from other machines — see the warning below first |
+| `--port` | `8000` | Port to listen on |
+| `--output-dir` | `./metascout_output` | Where each job's `report.json`/`report.html`/`downloads/` get saved (one subfolder per job, same layout as the CLI/web UI) |
+| `--max-workers` | `2` | Maximum scans actually running at once; extra jobs queue and wait their turn |
+
+Job tracking (status, in-progress log lines) is **in-memory only** — it
+doesn't survive a server restart. A finished job's `report.json`/
+`report.html` are still safely written to disk under `--output-dir` the
+whole time, same as the CLI/web UI, so a restart never loses a *completed*
+result — only the live status of whatever was still queued/running at that
+moment.
+
+> ⚠️ **No built-in authentication**, same posture as the [Web UI](#web-ui)
+> and the [Docker](#docker) image: fine on your own machine or inside a
+> trusted network as-is, but anyone who can reach it can start scans against
+> any target they choose using your server, and pull every job's results —
+> PII included, if `--scan-content` was used. Put it behind something that
+> actually authenticates callers first — a reverse proxy with an API key or
+> mTLS, a Tailscale/WireGuard-only network, an API gateway — before letting
+> anything outside a trusted network reach it. `--host 0.0.0.0` on its own
+> does **not** add any authentication.
+
+**Live-verified end to end**: ran `metascout api` for real (not just against
+FastAPI's in-process test client), `POST`ed a local-scan job at a directory
+containing a `.env` with a fake AWS key over HTTP, polled `GET
+/v1/scans/{job_id}` to `"done"`, and confirmed the key came back correctly
+masked in `report.json` — plus `report.html`, the zip download, and the
+Swagger UI at `/docs` all checked in a real browser.
+
+## Docker
+
+For running the web UI (or the [REST API](#rest-api-optional) above)
+without setting up Python/ExifTool/ImageMagick/Ghostscript by hand, or for
+putting it somewhere other than your own laptop:
 
 ```bash
 git clone https://github.com/gorkemguler/metascout.git
@@ -466,6 +556,18 @@ uncomment the `env_file:` line in `docker-compose.yml`.
 > who can reach an unauthenticated instance can start scans against
 > whatever target they choose using your server, and download every
 > previous run's results — PII included, if `--scan-content` was used.
+
+The same image also has the `api` extra baked in — override `CMD` to run
+the REST API instead of the web UI:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$(pwd)/metascout_output:/data" metascout \
+  api --host 0.0.0.0 --port 8000 --output-dir /data
+```
+
+See [REST API](#rest-api-optional) above — the same "bind to `127.0.0.1` on
+the host, put an authenticating proxy in front before exposing it further"
+guidance applies there too.
 
 ## Wayback Machine discovery
 
@@ -817,6 +919,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 ```bash
 metascout scan --help
 metascout web --help
+metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
@@ -860,6 +963,15 @@ metascout diff --help
 | `--port` | `8765` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where scan runs get saved |
 | `--open-browser` / `--no-open-browser` | on | Auto-open the browser on startup |
+
+`metascout api` options — see [REST API](#rest-api-optional) above:
+
+| Option | Default | Description |
+|---|---|---|
+| `--host` | `127.0.0.1` | Use `0.0.0.0` to accept connections from other machines — see the warning above first |
+| `--port` | `8000` | Port to listen on |
+| `--output-dir` | `./metascout_output` | Where each job's report/downloads get saved |
+| `--max-workers` | `2` | Maximum scans running at the same time |
 
 `metascout local-scan DIRECTORY` — analyzes documents already sitting in
 `DIRECTORY` (searched recursively): no discovery, no download, just
@@ -946,8 +1058,12 @@ src/metascout/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
 ├── diff.py                  compares two report.json payloads (new/removed docs, findings, content hits)
-├── pipeline.py              discover → download → extract → analyze flow (shared by CLI and web)
-├── cli.py                   click-based `scan` / `web` / `local-scan` / `visual-signature-scan` / `diff` commands
+├── api/                      opt-in REST API service (`metascout api`), separate from web.py
+│   ├── app.py               FastAPI app + routes (job-based: POST starts, GET polls/fetches)
+│   ├── jobs.py               in-memory job registry + background thread pool that runs the pipeline
+│   └── schemas.py            Pydantic request/response models (also drives the auto-generated /docs)
+├── pipeline.py              discover → download → extract → analyze flow (shared by CLI, web, and api)
+├── cli.py                   click-based `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` commands
 └── web.py                   Flask-based local web UI
 ```
 

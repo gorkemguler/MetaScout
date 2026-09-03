@@ -1,15 +1,18 @@
-# MetaScout — web UI image.
+# MetaScout — web UI image (also runs the REST API, see below).
 #
 # Bundles everything the *optional* extras need too (content-scan,
-# visual-signature, ocr) so the image works fully out of the box, no separate
-# `pip install` step for anyone using it. That does mean this is a heavier
-# image than a bare-metal `pip install metascout` (ImageMagick + Ghostscript
-# alone add ~150-250MB, Tesseract another chunk on top) — a deliberate
-# "batteries included" tradeoff for a container people pull/build once
-# rather than manage dependencies for.
+# visual-signature, ocr, api) so the image works fully out of the box, no
+# separate `pip install` step for anyone using it. That does mean this is a
+# heavier image than a bare-metal `pip install metascout` (ImageMagick +
+# Ghostscript alone add ~150-250MB, Tesseract another chunk on top) — a
+# deliberate "batteries included" tradeoff for a container people pull/build
+# once rather than manage dependencies for.
 #
 # Build:  docker build -t metascout .
-# Run:    docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
+# Run (web UI):  docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
+# Run (REST API), overriding the default CMD:
+#   docker run --rm -p 127.0.0.1:8000:8000 -v "$(pwd)/metascout_output:/data" metascout \
+#     api --host 0.0.0.0 --port 8000 --output-dir /data
 # (see the README's Docker section for the full picture, including the
 # --host 0.0.0.0 / authentication warning — this image has none built in.)
 
@@ -50,7 +53,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr]'
+RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr,api]'
 
 # Scan output (report.html/report.json/downloads/) lives here — mount a
 # volume at /data to get results back out onto the host and keep them
@@ -58,7 +61,10 @@ RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr]'
 RUN mkdir -p /data
 VOLUME /data
 
-EXPOSE 8765
+# 8765 (web UI) is the default CMD below; 8000 (REST API, `metascout api`)
+# is only used if you override CMD — both are declared so either works
+# without editing this file.
+EXPOSE 8765 8000
 
 ENTRYPOINT ["metascout"]
 # --host 0.0.0.0 so the port is reachable from outside the container at
@@ -67,5 +73,5 @@ ENTRYPOINT ["metascout"]
 # from outside the host — that depends entirely on how you publish the
 # port with `docker run -p` / `ports:` in compose. See the README: bind to
 # 127.0.0.1 on the host side unless you've put an authenticating proxy in
-# front of this — the app itself has no login of any kind.
+# front of this — neither the web UI nor the API has a login of any kind.
 CMD ["web", "--host", "0.0.0.0", "--port", "8765", "--output-dir", "/data", "--no-open-browser"]

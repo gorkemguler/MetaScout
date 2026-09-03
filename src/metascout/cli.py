@@ -521,5 +521,34 @@ def web(host: str, port: int, output_dir: str, open_browser: bool) -> None:
     run_server(host=host, port=port, output_dir=output_dir, open_browser=open_browser)
 
 
+@main.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Use 0.0.0.0 to accept connections from other machines — see the warning below first.")
+@click.option("--port", default=8000, show_default=True)
+@click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path(), help="Where each job's report.json/report.html/downloads get saved.")
+@click.option("--max-workers", default=2, show_default=True, help="Maximum scans running at the same time; extra jobs queue and wait.")
+def api(host: str, port: int, output_dir: str, max_workers: int) -> None:
+    """Launch the MetaScout REST API — a separate, job-based HTTP service
+    for programmatic/enterprise integration: POST a scan, poll its status,
+    then pull the JSON/HTML report or a zip once it's done. Interactive
+    docs at http://HOST:PORT/docs once running.
+
+    Requires the optional [api] extra: pip install 'metascout[api]'.
+    """
+    try:
+        import uvicorn
+
+        from .api import create_app
+    except ImportError:
+        console.print("[bold red]Missing dependency.[/bold red] Install the API extra first:")
+        console.print("  pip install 'metascout[api]'")
+        sys.exit(1)
+
+    _print_banner()
+    console.print(f"[bold]MetaScout API[/bold] starting on [bold]http://{host}:{port}/[/bold]  (docs: http://{host}:{port}/docs)")
+    console.print("[dim]No built-in authentication — see the README before exposing this beyond a trusted machine/network.[/dim]\n")
+    app = create_app(output_dir=output_dir, max_workers=max_workers)
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     main()
