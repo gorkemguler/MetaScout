@@ -10,7 +10,7 @@ from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
+from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig
 from .pipeline import run_scan
 from .report import render_html_report, render_json_report
 
@@ -49,6 +49,7 @@ def _print_summary(findings) -> None:
         ("Internal paths", findings.internal_paths),
         ("Servers / printers", findings.servers_and_printers),
         ("Geolocation (GPS)", findings.geolocation),
+        ("Critical files (opt-in)", findings.critical_files),
     ]:
         table.add_row(label, str(len(bucket)))
     console.print(table)
@@ -68,6 +69,16 @@ def _print_summary(findings) -> None:
         for category, hits in sorted(findings.content_findings_by_category.items()):
             content_table.add_row(category, str(len(hits)))
         console.print(content_table)
+
+    if findings.critical_files:
+        critical_table = Table(title="Critical / sensitive files found (opt-in — review manually)")
+        critical_table.add_column("URL")
+        critical_table.add_column("Type")
+        critical_table.add_column("Status")
+        for c in findings.critical_files:
+            status = f"[red]error: {c.error}[/red]" if c.error else "[green]ok[/green]"
+            critical_table.add_row(c.url, c.filetype, status)
+        console.print(critical_table)
 
 
 def _default_engines() -> str:
@@ -172,6 +183,18 @@ def main() -> None:
     "PLUS ImageMagick and Ghostscript installed system-wide. To run this later instead of inline, "
     "see `metascout visual-signature-scan`.",
 )
+@click.option(
+    "--critical-files/--no-critical-files", default=False,
+    help="Also run a second, independent discovery pass looking for plaintext/config-style "
+    "'critical' files (see --critical-file-types) — an exposed .env, a debug .log, a forgotten "
+    ".sql/.bak dump. Listed in their own report section: being publicly indexed is itself the "
+    "finding. Combine with --scan-content to also run the secrets/PII scan on whatever text they "
+    "contain, the same as any other document. Off by default.",
+)
+@click.option(
+    "--critical-file-types", default=",".join(DEFAULT_CRITICAL_FILETYPES), show_default=True,
+    help="Comma-separated file extensions for --critical-files.",
+)
 def scan(
     targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
@@ -179,6 +202,7 @@ def scan(
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
     scan_content: bool, content_categories: str, visual_signature: bool,
+    critical_files: bool, critical_file_types: str,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -224,6 +248,8 @@ def scan(
         scan_content=scan_content,
         content_categories=[c.strip().lower() for c in content_categories.split(",") if c.strip()],
         visual_signature=visual_signature,
+        critical_files=critical_files,
+        critical_file_types=[f.strip().lower().lstrip(".") for f in critical_file_types.split(",") if f.strip()],
     )
 
     _print_banner()
@@ -236,7 +262,7 @@ def scan(
         console.print(f"[bold red]{exc}[/bold red]")
         sys.exit(1)
 
-    if not findings.documents:
+    if not findings.documents and not findings.critical_files:
         console.print("[yellow]No documents discovered. Nothing to analyze.[/yellow]")
         sys.exit(0)
 
@@ -337,13 +363,16 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
 @click.option("--scan-content/--no-scan-content", default=False, help="Also scan document body text for PII (see --content-categories). Requires pip install 'metascout[content-scan]'.")
 @click.option("--content-categories", default=",".join(DEFAULT_CONTENT_CATEGORIES), show_default=True, help="Comma-separated subset of: tc_kimlik,email_phone,iban_card,address_dob,signature,secrets,infra. Only used with --scan-content.")
 @click.option("--visual-signature/--no-visual-signature", default=False, help="EXPERIMENTAL: also run the slow, heuristic, image-based signature check. Requires pip install 'metascout[visual-signature]' plus ImageMagick and Ghostscript installed system-wide.")
+@click.option("--critical-files/--no-critical-files", default=False, help="Also separately list plaintext/config-style 'critical' files found in DIRECTORY (see --critical-file-types) in their own report section. Combine with --scan-content to also run the secrets/PII scan on them.")
+@click.option("--critical-file-types", default=",".join(DEFAULT_CRITICAL_FILETYPES), show_default=True, help="Comma-separated file extensions for --critical-files.")
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)
 @click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True)
 @click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path())
 def local_scan(
     directory: str, filetypes: str, scan_content: bool, content_categories: str,
-    visual_signature: bool, json_report: bool, html_report: bool, report_lang: str, output_dir: str,
+    visual_signature: bool, critical_files: bool, critical_file_types: str,
+    json_report: bool, html_report: bool, report_lang: str, output_dir: str,
 ) -> None:
     """Analyze documents already sitting in DIRECTORY — no discovery, no
     download, just metadata extraction plus whichever optional checks you
@@ -357,6 +386,7 @@ def local_scan(
 
     cfg_categories = [c.strip().lower() for c in content_categories.split(",") if c.strip()]
     ft_list = [f.strip().lower().lstrip(".") for f in filetypes.split(",") if f.strip()]
+    critical_ft_list = [f.strip().lower().lstrip(".") for f in critical_file_types.split(",") if f.strip()]
 
     _print_banner()
     console.print(f"[bold]MetaScout[/bold] analyzing documents in [bold]{directory}[/bold]")
@@ -364,13 +394,14 @@ def local_scan(
     try:
         findings = run_local_document_scan(
             directory, filetypes=ft_list, scan_content=scan_content,
-            content_categories=cfg_categories, visual_signature=visual_signature, log=_cli_log,
+            content_categories=cfg_categories, visual_signature=visual_signature,
+            critical_files=critical_files, critical_file_types=critical_ft_list, log=_cli_log,
         )
     except RuntimeError as exc:
         console.print(f"[bold red]{exc}[/bold red]")
         sys.exit(1)
 
-    if not findings.documents:
+    if not findings.documents and not findings.critical_files:
         console.print("[yellow]No matching documents found. Nothing to analyze.[/yellow]")
         sys.exit(0)
 
@@ -398,7 +429,7 @@ def local_scan(
 def diff(run_a: str, run_b: str, json_out: str | None) -> None:
     """Compares two scan output directories (each containing a report.json)
     and shows what changed between them: new/removed documents, new/removed
-    metadata findings, new/removed content-scan hits.
+    metadata findings, new/removed content-scan hits, new/removed critical files.
 
     RUN_A is treated as the earlier scan, RUN_B the later one — "new" means
     "in RUN_B but not RUN_A". For tracking a target over time: run
@@ -440,11 +471,21 @@ def diff(run_a: str, run_b: str, json_out: str | None) -> None:
             str(len(result["content_findings"]["new"])),
             str(len(result["content_findings"]["removed"])),
         )
+        summary.add_row(
+            "Critical files",
+            str(len(result["critical_files"]["new"])),
+            str(len(result["critical_files"]["removed"])),
+        )
         console.print(summary)
 
         if result["documents"]["new"]:
             console.print("\n[bold green]New documents:[/bold green]")
             for url in result["documents"]["new"]:
+                console.print(f"  + {url}")
+
+        if result["critical_files"]["new"]:
+            console.print("\n[bold green]New critical files:[/bold green]")
+            for url in result["critical_files"]["new"]:
                 console.print(f"  + {url}")
 
         for cat in FINDING_CATEGORIES:

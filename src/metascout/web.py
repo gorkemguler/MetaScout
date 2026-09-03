@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, request, send_file, stream_with_context
 
-from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_FILETYPES, ScanConfig
+from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
 from .pipeline import run_local_document_scan, run_scan
 from .report import render_html_report, render_json_report
@@ -114,6 +114,14 @@ _STRINGS = {
                                   "(not just the pip package). For a large batch, running "
                                   "<code>metascout visual-signature-scan</code> from a terminal against "
                                   "this scan's output afterward is more practical than waiting here.",
+        "critical_files_label": "Also search for critical/sensitive files (.env, .log, .conf, .sql, ...)",
+        "critical_files_hint": "Independent of content scanning above — a second discovery pass using "
+                                "the same engines, but for plaintext/config-style files instead of "
+                                "documents (default extensions: "
+                                + ", ".join(f".{ft}" for ft in DEFAULT_CRITICAL_FILETYPES) + "). Being "
+                                "publicly indexed/reachable is itself the finding, listed in its own "
+                                "report section — turn on content scanning too if you also want the "
+                                "secrets/PII scan run on whatever text they contain.",
         "report_lang_label": "Report language",
         "max_docs_label": "Maximum documents",
         "max_crawl_pages_label": "Max pages per host",
@@ -177,6 +185,7 @@ _STRINGS = {
         "diff_col_docs": "Document(s)",
         "diff_documents_heading": "Documents",
         "diff_content_findings_heading": "Content scan hits",
+        "diff_critical_files_heading": "Critical files",
         "diff_back_to_history": "← Back to History",
     },
     "tr": {
@@ -241,6 +250,15 @@ _STRINGS = {
                                   "gerektirir (sadece pip paketi yetmez). Büyük bir belge grubu için, "
                                   "burada beklemek yerine bu taramanın sonuçları üzerinde terminalden "
                                   "<code>metascout visual-signature-scan</code> çalıştırmak daha pratik.",
+        "critical_files_label": "Kritik/hassas dosyaları da ara (.env, .log, .conf, .sql, ...)",
+        "critical_files_hint": "Yukarıdaki içerik taramasından bağımsız — aynı motorları kullanan "
+                                "ikinci bir keşif geçişi, ama belgeler yerine düz metin/config tarzı "
+                                "dosyalar için (varsayılan uzantılar: "
+                                + ", ".join(f".{ft}" for ft in DEFAULT_CRITICAL_FILETYPES) + "). "
+                                "Buradaki bulgu, dosyanın herkese açık şekilde indekslenmiş/erişilebilir "
+                                "olmasının kendisidir, kendi rapor bölümünde listelenir — içerdikleri "
+                                "metinde de sızmış kimlik bilgisi/PII taraması istiyorsanız yukarıdaki "
+                                "içerik taramasını da açın.",
         "report_lang_label": "Rapor dili",
         "max_docs_label": "Azami belge sayısı",
         "max_crawl_pages_label": "Host başına azami sayfa",
@@ -308,6 +326,7 @@ _STRINGS = {
         "diff_col_docs": "Belge(ler)",
         "diff_documents_heading": "Belgeler",
         "diff_content_findings_heading": "İçerik taraması bulguları",
+        "diff_critical_files_heading": "Kritik dosyalar",
         "diff_back_to_history": "← Geçmişe dön",
     },
 }
@@ -486,6 +505,9 @@ _FORM_BODY = """
   <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
   <div class="hint">{visual_signature_hint}</div>
 
+  <label><input type="checkbox" name="critical_files" id="critical_files"> {critical_files_label}</label>
+  <div class="hint">{critical_files_hint}</div>
+
   <label>{report_lang_label}</label>
   <div class="checks">
     <label><input type="radio" name="report_lang" value="en" {report_lang_en_checked}> English</label>
@@ -586,6 +608,8 @@ def _render_form(
         cat_infra=_t(ui_lang, "cat_infra"),
         visual_signature_label=_t(ui_lang, "visual_signature_label"),
         visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
+        critical_files_label=_t(ui_lang, "critical_files_label"),
+        critical_files_hint=_t(ui_lang, "critical_files_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
         report_lang_tr_checked="checked" if ui_lang == "tr" else "",
@@ -645,6 +669,9 @@ _LOCAL_SCAN_FORM_BODY = """
 
   <label><input type="checkbox" name="visual_signature" id="visual_signature"> {visual_signature_label}</label>
   <div class="hint">{visual_signature_hint}</div>
+
+  <label><input type="checkbox" name="critical_files" id="critical_files"> {critical_files_label}</label>
+  <div class="hint">{critical_files_hint}</div>
 
   <label>{report_lang_label}</label>
   <div class="checks">
@@ -706,6 +733,8 @@ def _render_local_form(
         cat_infra=_t(ui_lang, "cat_infra"),
         visual_signature_label=_t(ui_lang, "visual_signature_label"),
         visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
+        critical_files_label=_t(ui_lang, "critical_files_label"),
+        critical_files_hint=_t(ui_lang, "critical_files_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
         report_lang_tr_checked="checked" if ui_lang == "tr" else "",
@@ -941,6 +970,16 @@ def _render_diff(ui_lang: str, output_dir: str, run_a: str, run_b: str) -> tuple
                 sections.append(f'<div class="hint">{_t(ui_lang, "diff_removed_label")} ({len(cf["removed"])})</div>')
                 sections.append(_diff_content_finding_table(cf["removed"]))
 
+        crit = result["critical_files"]
+        if crit["new"] or crit["removed"]:
+            sections.append(f'<h3>{html.escape(_t(ui_lang, "diff_critical_files_heading"))}</h3>')
+            if crit["new"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_new_label")} ({len(crit["new"])})</div>')
+                sections.append(_diff_value_table(ui_lang, crit["new"]))
+            if crit["removed"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_removed_label")} ({len(crit["removed"])})</div>')
+                sections.append(_diff_value_table(ui_lang, crit["removed"]))
+
     page_head = _render_page_head(ui_lang, "history")
     body = (
         '<div class="card">'
@@ -991,6 +1030,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         scan_content = request.form.get("scan_content") == "on"
         content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
         visual_signature = request.form.get("visual_signature") == "on"
+        critical_files = request.form.get("critical_files") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):
             report_lang = "en"
@@ -1018,6 +1058,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             scan_content=scan_content,
             content_categories=content_categories,
             visual_signature=visual_signature,
+            critical_files=critical_files,
+            critical_file_types=list(DEFAULT_CRITICAL_FILETYPES),
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
             serper_api_key=os.environ.get("SERPER_API_KEY"),
@@ -1083,6 +1125,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         scan_content = request.form.get("scan_content") == "on"
         content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
         visual_signature = request.form.get("visual_signature") == "on"
+        critical_files = request.form.get("critical_files") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):
             report_lang = "en"
@@ -1098,7 +1141,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
                 _log(f"local-scan started: directory={raw_local_dir}")
                 findings = run_local_document_scan(
                     raw_local_dir, filetypes=filetypes, scan_content=scan_content,
-                    content_categories=content_categories, visual_signature=visual_signature, log=_log,
+                    content_categories=content_categories, visual_signature=visual_signature,
+                    critical_files=critical_files, critical_file_types=list(DEFAULT_CRITICAL_FILETYPES), log=_log,
                 )
             else:
                 _log(f"local-scan started: {len(local_urls)} URL(s), no discovery")
@@ -1107,6 +1151,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
                     targets=targets, manual_urls=local_urls, filetypes=filetypes, engines=[],
                     output_dir=run_dir, scan_content=scan_content,
                     content_categories=content_categories, visual_signature=visual_signature,
+                    critical_files=critical_files, critical_file_types=list(DEFAULT_CRITICAL_FILETYPES),
                 )
                 findings = run_scan(cfg, log=_log)
         except RuntimeError as exc:

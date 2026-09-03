@@ -10,6 +10,16 @@ DEFAULT_FILETYPES = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", 
 # invasive) thing than the always-on metadata-tag scan.
 DEFAULT_CONTENT_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signature", "secrets", "infra"]
 
+# Opt-in second discovery pass (ScanConfig.critical_files) — the same dork
+# search/crawl/sitemap/wayback engines used for --filetypes, run again for
+# plaintext/config-style files that tend to leak by simply existing and
+# being indexed: an exposed .env, a debug .log, a forgotten .bak/.sql dump.
+# Kept as a distinct list (and its own report section) rather than folded
+# into --filetypes: "this file is publicly reachable" is itself the finding
+# here, independent of whatever metadata extraction would find inside it
+# (which is nothing, for a .txt file) — see pipeline.py and models.CriticalFile.
+DEFAULT_CRITICAL_FILETYPES = ["txt", "log", "conf", "cfg", "ini", "env", "yml", "yaml", "sql", "bak"]
+
 # User-Agent identifies the tool honestly rather than spoofing a browser,
 # so target site operators can see recon traffic in their logs and block it if unwanted.
 DEFAULT_USER_AGENT = "MetaScout/0.1 (+authorized-metadata-recon-tool)"
@@ -47,3 +57,9 @@ class ScanConfig:
     # and the standalone `metascout visual-signature-scan` command, for
     # running this later against documents from a prior scan.
     visual_signature: bool = False
+    # See DEFAULT_CRITICAL_FILETYPES above. Independent of scan_content: this
+    # toggle controls whether the *discovery* pass runs at all; scan_content
+    # additionally controls whether the found files' text also gets the
+    # secrets/PII scan (same as any other document) once they're downloaded.
+    critical_files: bool = False
+    critical_file_types: list[str] = field(default_factory=lambda: list(DEFAULT_CRITICAL_FILETYPES))

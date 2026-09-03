@@ -44,6 +44,7 @@
 - [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
   - [Visual (wet) signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
   - [OCR fallback for scanned documents](#ocr-fallback-for-scanned-documents)
+- [Critical / sensitive files discovery](#critical--sensitive-files-discovery-optional)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -714,6 +715,50 @@ in the same test came back with a stray space inserted
 hits as a genuine improvement over finding nothing, not as reliable as a
 real text layer's.
 
+## Critical / sensitive files discovery (optional)
+
+Everything above — `--filetypes`, dork search included — looks for
+*document* types (pdf/doc/docx/...). `--critical-files` runs a second,
+independent discovery pass through the exact same engines, but for
+plaintext/config-style files that tend to leak simply by existing and being
+indexed: an exposed `.env`, a debug `.log`, a forgotten `.sql`/`.bak` dump.
+
+```bash
+metascout scan example.com --critical-files
+```
+
+Default extensions: `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` — override
+with `--critical-file-types`. Off by default; whatever it finds is listed in
+its own **"Critical / Sensitive Files"** report section (and counts toward
+the risk badge) rather than mixed into the regular documents list — being
+publicly reachable is itself the finding here, independent of anything found
+inside the file. Combine it with `--scan-content` to also run the
+secrets/PII scan on whatever text these files actually contain — the exact
+same detectors used for documents (see
+[Content scanning](#content-scanning-for-personal-data-optional) above),
+now pointed at plaintext instead of PDFs/Office files:
+
+```bash
+metascout scan example.com --critical-files --scan-content --content-categories secrets,infra
+```
+
+`metascout local-scan DIRECTORY --critical-files` does the same thing
+locally: files under `DIRECTORY` matching `--critical-file-types` are listed
+separately from `--filetypes` documents, without double-counting a file
+whose extension happens to be in both lists. The web UI has a matching
+**"Also search for critical/sensitive files"** checkbox on both the main
+scan form and "Scan Existing Documents".
+
+**Live-verified end to end**: a local test directory with a `.env`
+containing `AWS_ACCESS_KEY_ID=AKIA...` and a `.log` mentioning an internal
+hostname — both files turned up under "Critical / Sensitive Files" (size and
+status), and with `--scan-content` on, the AWS key was correctly masked
+(`AKIA****...`) and the internal hostname flagged under Content Scan, same
+as it would be for a PDF. Also confirmed through the web UI: a directory
+with only critical files and no regular documents still produces a full
+report (risk badge included) instead of the old "nothing to analyze" dead
+end.
+
 ## Search engine API keys (optional)
 
 The `google`, `serper`, and `brave` engines run classic FOCA-style
@@ -801,6 +846,8 @@ metascout diff --help
 | `--scan-content` / `--no-scan-content` | off | Also scan document body text for PII (see [Content scanning](#content-scanning-for-personal-data-optional)); needs `pip install 'metascout[content-scan]'` |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature,secrets,infra` | Comma-separated subset, only used with `--scan-content` |
 | `--visual-signature` / `--no-visual-signature` | off | **EXPERIMENTAL**, independent of `--scan-content`: visual (image-based) signature detection; slow (see [above](#visual-wet-signature-detection--experimental-separately-opt-in)), needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript |
+| `--critical-files` / `--no-critical-files` | off | Second discovery pass for plaintext/config-style files (see [above](#critical--sensitive-files-discovery-optional)) |
+| `--critical-file-types` | `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` | Comma-separated subset, only used with `--critical-files` |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -828,8 +875,9 @@ metascout local-scan ~/Downloads/reports --scan-content --visual-signature
 ```
 
 Takes the same `--filetypes`, `--scan-content`, `--content-categories`,
-`--visual-signature`, `--json-report`/`--html-report`, `--report-lang`, and
-`--output-dir` options as `metascout scan` (see the table above).
+`--visual-signature`, `--critical-files`, `--critical-file-types`,
+`--json-report`/`--html-report`, `--report-lang`, and `--output-dir` options
+as `metascout scan` (see the table above).
 
 `metascout visual-signature-scan REPORT_DIR` — runs the **EXPERIMENTAL**
 visual signature check (see [above](#visual-wet-signature-detection--experimental-separately-opt-in))

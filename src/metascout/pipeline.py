@@ -10,7 +10,7 @@ from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_sub
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
-from .models import ContentFinding, DiscoveredDocument, DiscoverySource, DownloadedDocument, ScanFindings
+from .models import ContentFinding, CriticalFile, DiscoveredDocument, DiscoverySource, DownloadedDocument, ScanFindings
 
 LogFn = Callable[[str], None]
 
@@ -24,26 +24,26 @@ def _ext_of(url: str) -> str:
     return path.rsplit(".", 1)[-1].lower() if "." in path else ""
 
 
-def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[DiscoveredDocument]:
+def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], log: LogFn) -> list[DiscoveredDocument]:
     found: dict[str, DiscoveredDocument] = {}
 
     for engine in cfg.engines:
         try:
             if engine == "crawl":
                 docs = crawl_site(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     max_pages=cfg.max_crawl_pages, max_depth=cfg.max_crawl_depth,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
                     respect_robots=cfg.respect_robots,
                 )
             elif engine == "sitemap":
                 docs = sitemap_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
                 )
             elif engine == "wayback":
                 docs = wayback_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
                     max_results=max(cfg.max_docs, 100),
                 )
@@ -51,7 +51,7 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                 # Google's API itself caps at ~100 results/query (start<=91),
                 # so there's no point asking for more than that per filetype.
                 docs = google_dork_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     api_key=cfg.google_api_key, cse_id=cfg.google_cse_id,
                     timeout=cfg.request_timeout, max_results_per_type=min(cfg.max_docs, 100),
                 )
@@ -61,19 +61,19 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
                 # the real ceiling; pagination self-terminates once the
                 # underlying results actually run out.
                 docs = serper_dork_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     api_key=cfg.serper_api_key, timeout=cfg.request_timeout,
                     max_results_per_type=cfg.max_docs,
                 )
             elif engine == "brave":
                 docs = brave_dork_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     api_key=cfg.brave_api_key, timeout=cfg.request_timeout,
                     max_results_per_type=cfg.max_docs,
                 )
             elif engine == "ddgs":
                 docs = ddgs_dork_search(
-                    host, cfg.filetypes,
+                    host, filetypes,
                     timeout=cfg.request_timeout, backend=cfg.ddgs_backend,
                     max_results_per_type=cfg.max_docs,
                 )
@@ -90,7 +90,16 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, log: LogFn) -> list[Disc
     return list(found.values())
 
 
-def discover_all(cfg: ScanConfig, log: LogFn = _noop_log) -> list[DiscoveredDocument]:
+def discover_all(cfg: ScanConfig, log: LogFn = _noop_log, *, filetypes: list[str] | None = None) -> list[DiscoveredDocument]:
+    """Runs discovery across all targets/subdomains via cfg.engines.
+
+    `filetypes` defaults to cfg.filetypes (the normal document search); pass
+    cfg.critical_file_types instead to run the same discovery engines for
+    the opt-in "critical files" pass (see ScanConfig.critical_files) without
+    duplicating the target/subdomain-enumeration loop below.
+    """
+    filetypes = cfg.filetypes if filetypes is None else filetypes
+
     if "google" in cfg.engines:
         log(
             "! google: Google, Custom Search JSON API'yi 1 Ocak 2027'de kapatıyor ve "
@@ -115,7 +124,7 @@ def discover_all(cfg: ScanConfig, log: LogFn = _noop_log) -> list[DiscoveredDocu
 
         for host in hosts:
             log(f"discovery on {host} via {', '.join(cfg.engines)} ...")
-            docs = _run_discovery_for_host(host, cfg, log)
+            docs = _run_discovery_for_host(host, cfg, filetypes, log)
             log(f"  found {len(docs)} link(s) on {host}")
             for d in docs:
                 found.setdefault(d.url, d)
@@ -148,30 +157,43 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
                 added += 1
         log(f"  {added} new, {len(cfg.manual_urls) - added} already discovered")
 
+    doc_metadata: list = []
     if not discovered:
         log("No documents discovered. Nothing to analyze.")
-        return analyze([], targets=cfg.targets)
+        findings = analyze([], targets=cfg.targets)
+    else:
+        if len(discovered) > cfg.max_docs:
+            log(f"Capping {len(discovered)} discovered documents to max_docs={cfg.max_docs}")
+            discovered = discovered[: cfg.max_docs]
 
-    if len(discovered) > cfg.max_docs:
-        log(f"Capping {len(discovered)} discovered documents to max_docs={cfg.max_docs}")
-        discovered = discovered[: cfg.max_docs]
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        downloads_dir = os.path.join(cfg.output_dir, "downloads")
 
-    os.makedirs(cfg.output_dir, exist_ok=True)
-    downloads_dir = os.path.join(cfg.output_dir, "downloads")
+        log(f"downloading {len(discovered)} document(s) ...")
+        downloaded = download_documents(
+            discovered, dest_dir=downloads_dir, concurrency=cfg.concurrency,
+            timeout=cfg.request_timeout, max_bytes=cfg.max_download_bytes, user_agent=cfg.user_agent,
+        )
+        ok_count = sum(1 for d in downloaded if not d.error)
+        log(f"{ok_count}/{len(downloaded)} downloaded successfully")
 
-    log(f"downloading {len(discovered)} document(s) ...")
-    downloaded = download_documents(
-        discovered, dest_dir=downloads_dir, concurrency=cfg.concurrency,
-        timeout=cfg.request_timeout, max_bytes=cfg.max_download_bytes, user_agent=cfg.user_agent,
-    )
-    ok_count = sum(1 for d in downloaded if not d.error)
-    log(f"{ok_count}/{len(downloaded)} downloaded successfully")
+        log("extracting metadata with exiftool ...")
+        doc_metadata = extract_metadata(downloaded)
 
-    log("extracting metadata with exiftool ...")
-    doc_metadata = extract_metadata(downloaded)
+        log("analyzing metadata ...")
+        findings = analyze(doc_metadata, targets=cfg.targets)
 
-    log("analyzing metadata ...")
-    findings = analyze(doc_metadata, targets=cfg.targets)
+    # Independent of the main document search on purpose (see
+    # ScanConfig.critical_files / DEFAULT_CRITICAL_FILETYPES): runs even if
+    # the main pass above found nothing, since someone may only care about
+    # exposed .env/.log/.sql-style files, not pdf/doc/... documents.
+    critical_downloaded: list = []
+    if cfg.critical_files:
+        critical_downloaded = _discover_and_download_critical_files(cfg, log)
+    findings.critical_files = [
+        CriticalFile(url=d.url, filetype=d.filetype, source=d.source, size_bytes=d.size_bytes, error=d.error)
+        for d in critical_downloaded
+    ]
 
     content_hits: list[ContentFinding] = []
     # Independent switches on purpose: the fast text/PII scan (--scan-content)
@@ -179,11 +201,42 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     # don't need each other — run whichever one(s) were actually asked for.
     if cfg.scan_content:
         content_hits.extend(_scan_content(doc_metadata, cfg.content_categories, log))
+        if critical_downloaded:
+            # Same scan, same categories — a leaked .env/.conf is exactly
+            # where a real secret/internal-host hit is most likely to show up.
+            content_hits.extend(_scan_content(critical_downloaded, cfg.content_categories, log))
     if cfg.visual_signature:
         content_hits.extend(scan_visual_signatures(doc_metadata, log))
     findings.content_findings = content_hits
 
     return findings
+
+
+def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn) -> list[DownloadedDocument]:
+    """Second, independent discovery pass for plaintext/config-style
+    "critical" files (see ScanConfig.critical_files / DEFAULT_CRITICAL_FILETYPES)
+    — same discovery engines as the main document search, just a different
+    filetype list, kept in its own downloads/ subfolder and report section.
+    """
+    log(f"discovering critical/sensitive files ({', '.join(cfg.critical_file_types)}) ...")
+    discovered = discover_all(cfg, log, filetypes=cfg.critical_file_types)
+    log(f"  found {len(discovered)} critical file candidate(s)")
+    if not discovered:
+        return []
+
+    if len(discovered) > cfg.max_docs:
+        log(f"  capping to max_docs={cfg.max_docs}")
+        discovered = discovered[: cfg.max_docs]
+
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    critical_dir = os.path.join(cfg.output_dir, "critical_files")
+    downloaded = download_documents(
+        discovered, dest_dir=critical_dir, concurrency=cfg.concurrency,
+        timeout=cfg.request_timeout, max_bytes=cfg.max_download_bytes, user_agent=cfg.user_agent,
+    )
+    ok_count = sum(1 for d in downloaded if not d.error)
+    log(f"  {ok_count}/{len(downloaded)} critical file(s) downloaded successfully")
+    return downloaded
 
 
 def _scan_content(doc_metadata, content_categories: list[str], log: LogFn) -> list:
@@ -267,6 +320,8 @@ def run_local_document_scan(
     scan_content: bool = False,
     content_categories: list[str] | None = None,
     visual_signature: bool = False,
+    critical_files: bool = False,
+    critical_file_types: list[str] | None = None,
     log: LogFn = _noop_log,
 ) -> ScanFindings:
     """Analyzes documents already sitting on disk — metadata extraction,
@@ -287,40 +342,67 @@ def run_local_document_scan(
         )
 
     filetype_set = {ft.lower().lstrip(".") for ft in filetypes if ft.strip()}
+    # Only actually used (non-empty) when critical_files is on — kept as its
+    # own set so a file matching both lists (unusual, but possible with a
+    # custom --filetypes) is still only ever counted once, under filetypes.
+    critical_set = (
+        {ft.lower().lstrip(".") for ft in (critical_file_types or []) if ft.strip()} - filetype_set
+        if critical_files else set()
+    )
+
     paths: list[str] = []
+    critical_paths: list[str] = []
     for root, _, names in os.walk(directory):
         for name in names:
             ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            full = os.path.join(root, name)
             if ext in filetype_set:
-                paths.append(os.path.join(root, name))
+                paths.append(full)
+            elif ext in critical_set:
+                critical_paths.append(full)
     paths.sort()
+    critical_paths.sort()
 
-    log(f"found {len(paths)} matching file(s) in {directory}")
+    log(f"found {len(paths)} matching document(s) in {directory}")
+    if critical_files:
+        log(f"found {len(critical_paths)} critical/sensitive file(s) in {directory}")
+
+    def _as_downloaded(file_paths: list[str]) -> list[DownloadedDocument]:
+        result = []
+        for p in file_paths:
+            ext = p.rsplit(".", 1)[-1].lower() if "." in p else ""
+            try:
+                size = os.path.getsize(p)
+            except OSError:
+                size = 0
+            result.append(DownloadedDocument(
+                url=f"file://{p}", local_path=p, filetype=ext,
+                source=DiscoverySource.MANUAL, size_bytes=size,
+            ))
+        return result
+
+    doc_metadata: list = []
     if not paths:
         log("No matching documents found. Nothing to analyze.")
-        return analyze([], targets=[directory])
+        findings = analyze([], targets=[directory])
+    else:
+        downloaded = _as_downloaded(paths)
+        log("extracting metadata with exiftool ...")
+        doc_metadata = extract_metadata(downloaded)
+        log("analyzing metadata ...")
+        findings = analyze(doc_metadata, targets=[directory])
 
-    downloaded = []
-    for p in paths:
-        ext = p.rsplit(".", 1)[-1].lower() if "." in p else ""
-        try:
-            size = os.path.getsize(p)
-        except OSError:
-            size = 0
-        downloaded.append(DownloadedDocument(
-            url=f"file://{p}", local_path=p, filetype=ext,
-            source=DiscoverySource.MANUAL, size_bytes=size,
-        ))
-
-    log("extracting metadata with exiftool ...")
-    doc_metadata = extract_metadata(downloaded)
-
-    log("analyzing metadata ...")
-    findings = analyze(doc_metadata, targets=[directory])
+    critical_downloaded = _as_downloaded(critical_paths) if critical_paths else []
+    findings.critical_files = [
+        CriticalFile(url=d.url, filetype=d.filetype, source=d.source, size_bytes=d.size_bytes, error=d.error)
+        for d in critical_downloaded
+    ]
 
     content_hits: list[ContentFinding] = []
     if scan_content:
         content_hits.extend(_scan_content(doc_metadata, content_categories or [], log))
+        if critical_downloaded:
+            content_hits.extend(_scan_content(critical_downloaded, content_categories or [], log))
     if visual_signature:
         content_hits.extend(scan_visual_signatures(doc_metadata, log))
     findings.content_findings = content_hits

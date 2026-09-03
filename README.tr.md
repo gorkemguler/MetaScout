@@ -44,6 +44,7 @@
 - [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
   - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)
   - [Taranmış belgeler için OCR](#taranmış-belgeler-için-ocr)
+- [Kritik / hassas dosya keşfi](#kritik--hassas-dosya-keşfi-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -733,6 +734,51 @@ bu da e-posta regex'ini atlatmaya yetti — OCR kaynaklı bulguları, hiçbir
 şey bulamamaya göre gerçek bir iyileşme olarak görün, gerçek bir metin
 katmanınınki kadar güvenilir değil.
 
+## Kritik / hassas dosya keşfi (opsiyonel)
+
+Yukarıdaki her şey — `--filetypes`, dork arama dahil — *belge* türlerini
+(pdf/doc/docx/...) arar. `--critical-files`, aynı motorlar üzerinden ikinci,
+bağımsız bir keşif geçişi çalıştırır — ama bu sefer sadece var olup
+indekslenmiş olmalarıyla bile sızıntı sayılabilecek düz metin/config tarzı
+dosyalar için: açıkta kalmış bir `.env`, bir debug `.log`, unutulmuş bir
+`.sql`/`.bak` dökümü.
+
+```bash
+metascout scan example.com --critical-files
+```
+
+Varsayılan uzantılar: `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` —
+`--critical-file-types` ile değiştirilebilir. Varsayılan kapalı; bulunan
+dosyalar normal belgeler listesine karışmadan kendi **"Kritik / Hassas
+Dosyalar"** rapor bölümünde listelenir (ve risk rozetine katkıda bulunur) —
+buradaki bulgu, dosyanın herkese açık erişilebilir olmasının kendisidir,
+içinde ne bulunduğundan bağımsız. `--scan-content` ile birlikte kullanınca,
+bu dosyaların içerdiği metinde de aynı sızmış kimlik bilgisi/PII
+tarayıcılarını (bkz. yukarıdaki [İçerik
+taraması](#kişisel-veri-içerik-taraması-opsiyonel)) çalıştırır — artık
+PDF/Office dosyaları yerine düz metne yönelik olarak:
+
+```bash
+metascout scan example.com --critical-files --scan-content --content-categories secrets,infra
+```
+
+`metascout local-scan DIRECTORY --critical-files` aynısını yerel olarak
+yapar: `DIRECTORY` altında `--critical-file-types`'a uyan dosyalar,
+`--filetypes`'a uyan belgelerden ayrı listelenir — bir dosyanın uzantısı her
+iki listede de olsa çift saymadan. Web arayüzünde de hem ana tarama
+formunda hem "Mevcut Belgeleri Tara" sayfasında karşılık gelen
+**"Kritik/hassas dosyaları da ara"** onay kutusu var.
+
+**Canlı uçtan uca doğrulandı**: içinde `AWS_ACCESS_KEY_ID=AKIA...` geçen bir
+`.env` ve iç bir hostname'den bahseden bir `.log` içeren yerel bir test
+dizini — her iki dosya da "Kritik / Hassas Dosyalar" altında (boyut ve
+durumuyla) çıktı, `--scan-content` açıkken AWS anahtarı doğru şekilde
+maskelendi (`AKIA****...`) ve iç hostname, tıpkı bir PDF'de olacağı gibi
+İçerik Taraması altında işaretlendi. Web arayüzü üzerinden de doğrulandı:
+sadece kritik dosya içeren, normal belge içermeyen bir dizin bile "analiz
+edilecek bir şey yok" eski çıkmazına düşmeden, risk rozeti dahil tam bir
+rapor üretiyor.
+
 ## Arama motoru API anahtarları (opsiyonel)
 
 `google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
@@ -821,6 +867,8 @@ metascout diff --help
 | `--scan-content` / `--no-scan-content` | kapalı | Belge gövde metnini de PII için tarar (bkz. [Kişisel veri içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)); `pip install 'metascout[content-scan]'` gerekir |
 | `--content-categories` | `tc_kimlik,email_phone,iban_card,address_dob,signature,secrets,infra` | Virgülle ayrılmış alt küme, sadece `--scan-content` ile kullanılır |
 | `--visual-signature` / `--no-visual-signature` | kapalı | **DENEYSEL**, `--scan-content`'ten bağımsız: görsel (görüntü tabanlı) imza tespiti; yavaş (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)), `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript gerektirir |
+| `--critical-files` / `--no-critical-files` | kapalı | Düz metin/config tarzı dosyalar için ikinci keşif geçişi (bkz. [yukarıda](#kritik--hassas-dosya-keşfi-opsiyonel)) |
+| `--critical-file-types` | `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` | Virgülle ayrılmış alt küme, sadece `--critical-files` ile kullanılır |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -848,8 +896,9 @@ metascout local-scan ~/Downloads/raporlar --scan-content --visual-signature
 ```
 
 `metascout scan` ile aynı `--filetypes`, `--scan-content`,
-`--content-categories`, `--visual-signature`, `--json-report`/`--html-report`,
-`--report-lang` ve `--output-dir` seçeneklerini alır (yukarıdaki tabloya bakın).
+`--content-categories`, `--visual-signature`, `--critical-files`,
+`--critical-file-types`, `--json-report`/`--html-report`, `--report-lang` ve
+`--output-dir` seçeneklerini alır (yukarıdaki tabloya bakın).
 
 `metascout visual-signature-scan REPORT_DIR` — **DENEYSEL** görsel imza
 kontrolünü (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel))

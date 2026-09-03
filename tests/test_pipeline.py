@@ -1,8 +1,8 @@
 from unittest.mock import patch
 
 from metascout.config import ScanConfig
-from metascout.models import ContentFinding, DiscoveredDocument, DiscoverySource, DocumentMetadata
-from metascout.pipeline import run_scan, scan_visual_signatures
+from metascout.models import ContentFinding, DiscoveredDocument, DiscoverySource, DocumentMetadata, DownloadedDocument
+from metascout.pipeline import run_local_document_scan, run_scan, scan_visual_signatures
 
 
 def _cfg(**overrides) -> ScanConfig:
@@ -234,3 +234,208 @@ def test_scan_visual_signatures_logs_and_returns_empty_when_dependency_missing()
     mock_detect.assert_not_called()
     assert hits == []
     assert any("missing optional dependencies" in m for m in logs)
+
+
+# --- Critical/sensitive files discovery (ScanConfig.critical_files) ---
+
+def test_run_scan_leaves_critical_files_empty_when_disabled():
+    cfg = _cfg(manual_urls=["https://example.com/a.pdf"], critical_files=False)
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", return_value=[]) as mock_discover, \
+         patch("metascout.pipeline.download_documents", return_value=[]), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata):
+        findings = run_scan(cfg)
+
+    # Only the one (mocked) call for the main document search — no second
+    # discovery pass for critical files when the flag is off.
+    mock_discover.assert_called_once()
+    assert findings.critical_files == []
+
+
+def test_run_scan_discovers_and_downloads_critical_files_when_enabled():
+    cfg = _cfg(
+        manual_urls=["https://example.com/a.pdf"],
+        critical_files=True, critical_file_types=["env", "log"],
+    )
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+    critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
+
+    discover_calls = []
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None):
+        discover_calls.append(filetypes)
+        return critical_discovered if filetypes == ["env", "log"] else []
+
+    downloaded_dirs = []
+
+    def fake_download_documents(documents, *, dest_dir, **kwargs):
+        downloaded_dirs.append(dest_dir)
+        return [DownloadedDocument(url=d.url, local_path="/tmp/.env", filetype=d.filetype, source=d.source, size_bytes=42) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download_documents), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata):
+        findings = run_scan(cfg)
+
+    assert discover_calls == [None, ["env", "log"]]  # main pass, then the critical-files pass
+    assert any(d.endswith("critical_files") for d in downloaded_dirs)
+    assert len(findings.critical_files) == 1
+    assert findings.critical_files[0].url == "https://example.com/.env"
+    assert findings.critical_files[0].filetype == "env"
+    assert findings.critical_files[0].size_bytes == 42
+
+
+def test_run_scan_critical_files_populated_even_when_no_regular_documents_found():
+    # Independent of the main document search on purpose — someone may only
+    # care about exposed .env/.log-style files, not pdf/doc/... documents.
+    cfg = _cfg(critical_files=True, critical_file_types=["env"])
+    critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None):
+        return critical_discovered if filetypes == ["env"] else []
+
+    def fake_download_documents(documents, **kwargs):
+        return [DownloadedDocument(url=d.url, local_path="/tmp/.env", filetype=d.filetype, source=d.source) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download_documents), \
+         patch("metascout.pipeline.extract_metadata", return_value=[]):
+        findings = run_scan(cfg)
+
+    assert findings.documents == []
+    assert len(findings.critical_files) == 1
+
+
+def test_run_scan_scans_critical_files_content_when_scan_content_enabled():
+    cfg = _cfg(
+        manual_urls=["https://example.com/a.pdf"],
+        critical_files=True, critical_file_types=["env"],
+        scan_content=True, content_categories=["secrets"],
+    )
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+    critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None):
+        return critical_discovered if filetypes == ["env"] else []
+
+    def fake_download_documents(documents, **kwargs):
+        return [DownloadedDocument(url=d.url, local_path="/tmp/critical.env", filetype=d.filetype, source=d.source) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download_documents), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document") as mock_scan_document:
+        mock_scan_document.return_value = []
+        run_scan(cfg)
+
+    called_paths = {call.args[0] for call in mock_scan_document.call_args_list}
+    assert called_paths == {"/tmp/a.pdf", "/tmp/critical.env"}
+
+
+def test_run_scan_does_not_scan_critical_files_content_when_scan_content_disabled():
+    cfg = _cfg(
+        manual_urls=["https://example.com/a.pdf"],
+        critical_files=True, critical_file_types=["env"], scan_content=False,
+    )
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+    critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None):
+        return critical_discovered if filetypes == ["env"] else []
+
+    def fake_download_documents(documents, **kwargs):
+        return [DownloadedDocument(url=d.url, local_path="/tmp/critical.env", filetype=d.filetype, source=d.source) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download_documents), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata), \
+         patch("metascout.pipeline.scan_document") as mock_scan_document:
+        findings = run_scan(cfg)
+
+    mock_scan_document.assert_not_called()
+    assert len(findings.critical_files) == 1
+
+
+def test_run_local_document_scan_lists_critical_files_separately(tmp_path):
+    (tmp_path / "report.pdf").write_bytes(b"%PDF-1.4\n")
+    (tmp_path / "config.env").write_text("DB_PASSWORD=hunter2\n")
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.extract_metadata", side_effect=lambda docs: [
+             DocumentMetadata(url=d.url, local_path=d.local_path, filetype=d.filetype) for d in docs
+         ]):
+        findings = run_local_document_scan(
+            str(tmp_path), filetypes=["pdf"],
+            critical_files=True, critical_file_types=["env"],
+        )
+
+    assert len(findings.documents) == 1
+    assert findings.documents[0].filetype == "pdf"
+    assert len(findings.critical_files) == 1
+    assert findings.critical_files[0].filetype == "env"
+
+
+def test_run_local_document_scan_critical_files_off_by_default(tmp_path):
+    (tmp_path / "report.pdf").write_bytes(b"%PDF-1.4\n")
+    (tmp_path / "config.env").write_text("DB_PASSWORD=hunter2\n")
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.extract_metadata", side_effect=lambda docs: [
+             DocumentMetadata(url=d.url, local_path=d.local_path, filetype=d.filetype) for d in docs
+         ]):
+        findings = run_local_document_scan(str(tmp_path), filetypes=["pdf"])
+
+    assert findings.critical_files == []
+
+
+def test_run_local_document_scan_works_with_only_critical_files_no_regular_documents(tmp_path):
+    (tmp_path / "config.env").write_text("DB_PASSWORD=hunter2\n")
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True):
+        findings = run_local_document_scan(
+            str(tmp_path), filetypes=["pdf"],
+            critical_files=True, critical_file_types=["env"],
+        )
+
+    assert findings.documents == []
+    assert len(findings.critical_files) == 1
+
+
+def test_run_local_document_scan_scans_critical_files_content_when_scan_content_enabled(tmp_path):
+    (tmp_path / "config.env").write_text("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n")
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True):
+        findings = run_local_document_scan(
+            str(tmp_path), filetypes=["pdf"],
+            critical_files=True, critical_file_types=["env"],
+            scan_content=True, content_categories=["secrets"],
+        )
+
+    assert len(findings.content_findings) == 1
+    assert findings.content_findings[0].category == "secret:AWS Access Key ID"
+    assert findings.content_findings[0].document_url.endswith("config.env")
+
+
+def test_run_local_document_scan_extension_in_both_lists_counts_only_as_document(tmp_path):
+    # A file matching --filetypes must not also be double-listed under
+    # critical_files, even if the same extension is (unusually) present in
+    # --critical-file-types too.
+    (tmp_path / "notes.txt").write_text("hello\n")
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.extract_metadata", side_effect=lambda docs: [
+             DocumentMetadata(url=d.url, local_path=d.local_path, filetype=d.filetype) for d in docs
+         ]):
+        findings = run_local_document_scan(
+            str(tmp_path), filetypes=["txt"],
+            critical_files=True, critical_file_types=["txt"],
+        )
+
+    assert len(findings.documents) == 1
+    assert findings.critical_files == []

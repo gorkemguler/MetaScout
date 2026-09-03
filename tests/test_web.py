@@ -119,6 +119,40 @@ def test_visual_signature_defaults_off_and_wires_when_enabled(tmp_path):
     assert captured_cfg["visual_signature"] is True
 
 
+def test_critical_files_defaults_off_and_wires_when_enabled(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+
+    captured_cfg = {}
+
+    def fake_run_scan(cfg, log=None):
+        captured_cfg["critical_files"] = cfg.critical_files
+        captured_cfg["critical_file_types"] = cfg.critical_file_types
+        from metascout.metadata.analyzer import analyze
+        return analyze([], targets=cfg.targets)
+
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={
+            "targets": "example.com", "manual_urls": "", "engines": ["crawl"],
+        })
+    assert captured_cfg["critical_files"] is False
+
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={
+            "targets": "example.com", "manual_urls": "", "engines": ["crawl"],
+            "critical_files": "on",
+        })
+    assert captured_cfg["critical_files"] is True
+    assert "env" in captured_cfg["critical_file_types"]
+
+
+def test_scan_form_includes_critical_files_checkbox():
+    app = create_app()
+    client = app.test_client()
+    body = client.get("/").get_data(as_text=True)
+    assert 'name="critical_files"' in body
+
+
 def test_local_scan_index_includes_nav_and_form_fields():
     app = create_app()
     client = app.test_client()
@@ -162,23 +196,25 @@ def test_local_scan_directory_mode_calls_run_local_document_scan(tmp_path):
 
     captured = {}
 
-    def fake_run_local(directory, *, filetypes, scan_content, content_categories, visual_signature, log=None):
+    def fake_run_local(directory, *, filetypes, scan_content, content_categories, visual_signature, critical_files, critical_file_types, log=None):
         captured["directory"] = directory
         captured["scan_content"] = scan_content
         captured["visual_signature"] = visual_signature
+        captured["critical_files"] = critical_files
         from metascout.metadata.analyzer import analyze
         return analyze([], targets=[directory])
 
     with patch("metascout.web.run_local_document_scan", side_effect=fake_run_local):
         resp = client.post("/local-scan", data={
             "local_dir": str(docs_dir), "local_urls": "",
-            "scan_content": "on", "visual_signature": "on",
+            "scan_content": "on", "visual_signature": "on", "critical_files": "on",
         })
 
     assert resp.status_code == 200
     assert captured["directory"] == str(docs_dir)
     assert captured["scan_content"] is True
     assert captured["visual_signature"] is True
+    assert captured["critical_files"] is True
 
 
 def test_local_scan_url_mode_calls_run_scan_with_no_discovery(tmp_path):

@@ -142,9 +142,9 @@
       <span class="meta-item">Tarama tarihi: <strong>{{ findings.scanned_at.strftime("%d.%m.%Y %H:%M") }} UTC</strong></span>
       <span class="meta-item">Taranan belge: <strong>{{ findings.documents | length }}</strong></span>
       {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length %}
-      {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length %}
+      {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.critical_files|length %}
       {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
-      {% if total_findings == 0 and not findings.content_findings %}
+      {% if total_findings == 0 and not findings.content_findings and not findings.critical_files %}
         <span class="badge badge-none">Bulgu Yok</span>
       {% elif critical_content_hits > 0 or findings.geolocation %}
         <span class="badge badge-high">Yüksek Risk</span>
@@ -191,6 +191,14 @@
           numarası{% endif %} tespit edildi — aşağıdaki <a href="#content-scan">İçerik Taraması</a>
           bölümüne bakın. Bunlar sezgiseldir: her birini elle doğrulayın.
         {% endif %}
+        {% if findings.critical_files %}
+          Ayrıca, herkese açık olarak indekslenmiş kritik/hassas dosyalar (.env, .log, .conf,
+          .sql, ...) için yapılan isteğe bağlı aramada
+          <strong>{{ findings.critical_files | length }}</strong> dosya bulundu — aşağıdaki
+          <a href="#critical-files">Kritik Dosyalar</a> bölümüne bakın. Buradaki bulgu,
+          dosyanın çevrimiçi olarak erişilebilir olmasının kendisidir; her birini elle
+          inceleyin.
+        {% endif %}
       {% endif %}
     </p>
 
@@ -208,6 +216,9 @@
       {% endif %}
       {% if findings.content_findings %}
       <div class="card"><div class="icon ic-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16.5h.01"/></svg></div><div class="num">{{ findings.content_findings | length }}</div><div class="label">İçerik taraması bulgusu</div></div>
+      {% endif %}
+      {% if findings.critical_files %}
+      <div class="card"><div class="icon ic-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div><div class="num">{{ findings.critical_files | length }}</div><div class="label">Kritik dosya</div></div>
       {% endif %}
     </div>
 
@@ -362,6 +373,40 @@
       </table>
       </div>
       {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if findings.critical_files %}
+    <section id="critical-files">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+        <h2>Kritik / Hassas Dosyalar — isteğe bağlı keşif</h2>
+        <span class="n">{{ findings.critical_files | length }}</span>
+      </div>
+      <p class="summary" style="margin:-4px 0 14px;">
+        Düz metin/config tarzı dosyalar (.env, .log, .conf, .sql, ...) — normal belgelerle
+        aynı keşif aramasıyla, <code>--filetypes</code>'a ek olarak bulundu. Buradaki
+        bulgu, dosyanın herkese açık şekilde indekslenmiş/erişilebilir olmasının
+        kendisidir — her birini elle inceleyin, kimlik bilgisi veya iç detaylar içerebilir.
+      </p>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>URL</th><th>Tür</th><th>Boyut</th><th>Durum</th></tr></thead>
+        <tbody>
+        {% for c in findings.critical_files %}
+          <tr>
+            <td class="value"><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.url | truncate(90) }}</a></td>
+            <td><span class="filetype-badge">{{ c.filetype }}</span></td>
+            <td class="doclist">{{ (c.size_bytes / 1024) | round(1) }} KB</td>
+            <td>
+              {% if c.error %}<span class="status-err">hata: {{ c.error }}</span>
+              {% else %}<span class="status-ok">ok</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
     </section>
     {% endif %}
 

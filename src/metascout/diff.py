@@ -61,11 +61,21 @@ def diff_reports(report_a: dict, report_b: dict) -> dict:
     docs_b = {d["url"] for d in report_b.get("documents", []) if d.get("url")}
     documents_diff = {"new": sorted(docs_b - docs_a), "removed": sorted(docs_a - docs_b)}
 
+    # Older reports won't have "critical_files" at all (added later) —
+    # .get(..., []) treats that the same as an empty list, same reasoning as
+    # FINDING_CATEGORIES above.
+    critical_a = {c["url"] for c in report_a.get("critical_files", []) if c.get("url")}
+    critical_b = {c["url"] for c in report_b.get("critical_files", []) if c.get("url")}
+    critical_files_diff = {"new": sorted(critical_b - critical_a), "removed": sorted(critical_a - critical_b)}
+
     content_diff = _diff_content_findings(
         report_a.get("content_findings", []), report_b.get("content_findings", []),
     )
 
-    return {"findings": findings_diff, "documents": documents_diff, "content_findings": content_diff}
+    return {
+        "findings": findings_diff, "documents": documents_diff,
+        "content_findings": content_diff, "critical_files": critical_files_diff,
+    }
 
 
 def has_changes(diff: dict) -> bool:
@@ -74,5 +84,7 @@ def has_changes(diff: dict) -> bool:
     if diff["documents"]["new"] or diff["documents"]["removed"]:
         return True
     if diff["content_findings"]["new"] or diff["content_findings"]["removed"]:
+        return True
+    if diff["critical_files"]["new"] or diff["critical_files"]["removed"]:
         return True
     return any(v["new"] or v["removed"] for v in diff["findings"].values())

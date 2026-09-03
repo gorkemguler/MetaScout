@@ -12,6 +12,17 @@ except ImportError:  # optional dependency, see pyproject.toml [content-scan]
     PdfReader = None  # type: ignore[assignment]
     PYPDF_AVAILABLE = False
 
+# Plaintext / config-style extensions read directly as text, no parsing
+# needed — covers the default "critical files" extension list
+# (config.DEFAULT_CRITICAL_FILETYPES) plus a few closely related ones, so a
+# leaked .env/.conf/.log turns up in the secrets/infra content scan the same
+# way a PDF or docx would, once --scan-content is also on. Not imported from
+# config.py to keep this module dependency-free either way; a filetype
+# outside this set (or ScanConfig.critical_file_types) just falls through to
+# the "not supported" case below, same graceful "" as always.
+_PLAIN_TEXT_TYPES = {"txt", "log", "conf", "cfg", "ini", "env", "yml", "yaml", "sql", "bak", "csv", "md"}
+_PLAIN_TEXT_MAX_BYTES = 2_000_000  # 2 MB is already a huge text/config file; cap so one giant log can't stall a scan
+
 
 def extract_text(local_path: str, filetype: str) -> str:
     """Best-effort plain-text extraction from a downloaded document, for
@@ -33,11 +44,24 @@ def extract_text(local_path: str, filetype: str) -> str:
             return _extract_pptx(local_path)
         if ft in ("odt", "ods", "odp"):
             return _zip_xml_text(local_path, ["content.xml"])
+        if ft in _PLAIN_TEXT_TYPES:
+            return _extract_plain_text(local_path)
     except Exception:
         return ""
     # .doc/.xls/.ppt (legacy binary Office formats) and anything else:
     # not supported without extra heavyweight dependencies (e.g. olefile).
     return ""
+
+
+def _extract_plain_text(local_path: str) -> str:
+    with open(local_path, "rb") as f:
+        data = f.read(_PLAIN_TEXT_MAX_BYTES)
+    # errors="replace" rather than raising: these files aren't guaranteed to
+    # be UTF-8 (a Windows-authored .conf/.log might be cp1252, or genuinely
+    # binary content saved with a text-y extension) — a best-effort decode
+    # still lets the regex scanners find whatever plain-ASCII secrets/PII
+    # are in there instead of contributing nothing at all.
+    return data.decode("utf-8", errors="replace")
 
 
 def _extract_pdf(local_path: str) -> str:

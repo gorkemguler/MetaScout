@@ -47,6 +47,16 @@ def render_json_report(findings: ScanFindings) -> str:
             }
             for f in findings.content_findings
         ],
+        "critical_files": [
+            {
+                "url": c.url,
+                "filetype": c.filetype,
+                "source": c.source,
+                "size_bytes": c.size_bytes,
+                "error": c.error,
+            }
+            for c in findings.critical_files
+        ],
         "errors": findings.errors,
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)

@@ -83,3 +83,38 @@ def test_diff_reports_content_findings_removed():
 
 def test_has_changes_false_for_empty_reports():
     assert has_changes(diff_reports(_report(), _report())) is False
+
+
+def _report_with_critical(critical_files=None):
+    r = _report()
+    r["critical_files"] = critical_files or []
+    return r
+
+
+def test_diff_reports_new_critical_file():
+    a = _report_with_critical([{"url": "https://example.com/.env", "filetype": "env"}])
+    b = _report_with_critical([
+        {"url": "https://example.com/.env", "filetype": "env"},
+        {"url": "https://example.com/backup.sql", "filetype": "sql"},
+    ])
+    d = diff_reports(a, b)
+    assert d["critical_files"]["new"] == ["https://example.com/backup.sql"]
+    assert d["critical_files"]["removed"] == []
+    assert has_changes(d) is True
+
+
+def test_diff_reports_removed_critical_file():
+    a = _report_with_critical([{"url": "https://example.com/old.log", "filetype": "log"}])
+    b = _report_with_critical([])
+    d = diff_reports(a, b)
+    assert d["critical_files"]["removed"] == ["https://example.com/old.log"]
+    assert d["critical_files"]["new"] == []
+
+
+def test_diff_reports_handles_missing_critical_files_key_gracefully():
+    # An older report.json (pre-dating the critical-files feature) won't
+    # have this key at all — must not raise, treated the same as empty.
+    a = _report()
+    b = _report_with_critical([{"url": "https://example.com/.env", "filetype": "env"}])
+    d = diff_reports(a, b)
+    assert d["critical_files"]["new"] == ["https://example.com/.env"]

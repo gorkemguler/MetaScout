@@ -331,6 +331,41 @@ def test_extract_text_corrupt_zip_degrades_to_empty_string(tmp_path):
     assert te.extract_text(str(p), "docx") == ""
 
 
+@pytest.mark.parametrize("ext", ["txt", "log", "conf", "cfg", "ini", "env", "yml", "yaml", "sql", "bak"])
+def test_extract_text_plain_text_types_read_verbatim(tmp_path, ext):
+    # Covers config.DEFAULT_CRITICAL_FILETYPES — the "critical files" feature
+    # relies on every one of these being readable as text so the
+    # secrets/infra content scan can find hits in them.
+    p = tmp_path / f"file.{ext}"
+    p.write_text("DB_PASSWORD=hunter2\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n")
+    text = te.extract_text(str(p), ext)
+    assert "DB_PASSWORD=hunter2" in text
+    assert "AKIAIOSFODNN7EXAMPLE" in text
+
+
+def test_extract_text_plain_text_type_strips_leading_dot_and_is_case_insensitive(tmp_path):
+    p = tmp_path / "server.log"
+    p.write_text("connection refused\n")
+    assert "connection refused" in te.extract_text(str(p), ".LOG")
+
+
+def test_extract_text_plain_text_non_utf8_bytes_degrade_gracefully_not_raise(tmp_path):
+    p = tmp_path / "weird.conf"
+    p.write_bytes(b"key=value\xff\xfe garbage\n")
+    text = te.extract_text(str(p), "conf")
+    assert "key=value" in text  # decode(errors="replace") — no exception, ASCII prefix intact
+
+
+def test_extract_text_plain_text_missing_file_returns_empty_not_raise():
+    assert te.extract_text("/no/such/file.env", "env") == ""
+
+
+def test_extract_text_unknown_filetype_still_returns_empty(tmp_path):
+    p = tmp_path / "data.bin"
+    p.write_bytes(b"\x00\x01\x02")
+    assert te.extract_text(str(p), "bin") == ""
+
+
 def test_extract_text_pdf_without_pypdf_returns_empty(tmp_path):
     p = tmp_path / "some.pdf"
     p.write_bytes(b"%PDF-1.4\n")

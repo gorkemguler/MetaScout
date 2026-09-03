@@ -73,6 +73,24 @@ class ContentFinding:
 
 
 @dataclass
+class CriticalFile:
+    """One hit from the opt-in "critical/sensitive files" discovery pass
+    (ScanConfig.critical_files) — a plaintext/config-style file (.txt, .log,
+    .env, .sql, ...) found via the same discovery engines used for regular
+    documents, but kept in its own list/report section: unlike a Finding,
+    the leak here is the file's mere existence and public reachability, not
+    a value extracted from inside it. `error` is set when the download
+    itself failed (still worth listing — the file was discovered, i.e. some
+    engine has it indexed/linked, even if it's since gone 404).
+    """
+    url: str
+    filetype: str
+    source: DiscoverySource
+    size_bytes: int = 0
+    error: str | None = None
+
+
+@dataclass
 class ScanFindings:
     targets: list[str]
     scanned_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -89,6 +107,8 @@ class ScanFindings:
     # physical location, not just software/username info.
     geolocation: dict[str, Finding] = field(default_factory=dict)
     content_findings: list[ContentFinding] = field(default_factory=list)
+    # Opt-in (ScanConfig.critical_files) — see CriticalFile above.
+    critical_files: list[CriticalFile] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
     @property
