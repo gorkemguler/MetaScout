@@ -385,6 +385,21 @@ raporu yeniden açmak için bir "Raporu görüntüle" linki ve "İndir (.zip)"
 linki ile birlikte, böylece geçmiş sonuçlara `metascout web`'in gerçekte
 çalıştığı yere dosya sistemi erişimi gerekmeden, sadece tarayıcıdan
 ulaşılabilir.
+
+İki veya daha fazla çalıştırma olduğunda, Geçmiş sayfasında ayrıca bir
+**"İki çalıştırmayı karşılaştır"** formu vardır: daha eski ve daha yeni bir
+çalıştırma seçin, aralarında tam olarak ne değişmiş görün — yeni/kaldırılmış
+belgeler, kategoriye göre yeni/kaldırılmış metadata bulguları,
+yeni/kaldırılmış içerik taraması sonuçları. Bir hedefi zaman içinde takip
+etmek için: periyodik olarak tarayın (her seferinde kendi zaman damgalı
+çıktı dizinine, varsayılan davranış budur) ve neyin değiştiğini görmek için
+iki çalıştırmayı karşılaştırın. Aynı karşılaştırma, tarayıcı olmadan
+doğrudan CLI'dan da kullanılabilir:
+
+```bash
+metascout diff metascout_output/web-20260101-100000 metascout_output/web-20260201-100000
+```
+
 ## Docker (web arayüzü)
 
 Python/ExifTool/ImageMagick/Ghostscript'i elle kurmadan web arayüzünü
@@ -779,6 +794,7 @@ metascout scan --help
 metascout web --help
 metascout local-scan --help
 metascout visual-signature-scan --help
+metascout diff --help
 ```
 
 `metascout scan` bir veya daha fazla `TARGET` pozisyonel argümanı alır
@@ -849,6 +865,21 @@ metascout visual-signature-scan --help
 | `REPORT_DIR` | – | Bir taramanın çıktı dizini (`report.json` içerir), ör. `./metascout_output` ya da bir `web-YYYYMMDD-HHMMSS` klasörü |
 | `--json-out` | `REPORT_DIR/visual_signature_report.json` | Sonuçların yazılacağı yer |
 
+`metascout diff RUN_A RUN_B` — iki önceki tarama çalıştırmasını karşılaştırır
+ve aralarında neyin yeni, neyin kaybolmuş olduğunu yazdırır (belgeler,
+metadata bulguları, içerik taraması sonuçları). Bkz. [Web arayüzü](#web-arayüzü)
+altındaki **"İki çalıştırmayı karşılaştır"** paragrafı.
+
+```bash
+metascout diff --help
+```
+
+| Argüman/Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `RUN_A` | – | Daha eski çalıştırmanın çıktı dizini (`report.json` içerir) |
+| `RUN_B` | – | Daha yeni çalıştırmanın çıktı dizini (`report.json` içerir) |
+| `--json-out` | – | Opsiyonel: tam karşılaştırmayı JSON olarak da bu yola yazar |
+
 ## Çıktı yapısı
 
 ```
@@ -886,8 +917,9 @@ src/metascout/
 ├── report/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor
+├── diff.py                  iki report.json çıktısını karşılaştırır (yeni/kaldırılmış belge, bulgu, içerik sonucu)
 ├── pipeline.py              discover → download → extract → analyze akışı (CLI ve web'in ortak motoru)
-├── cli.py                   click tabanlı `scan` / `web` / `local-scan` / `visual-signature-scan` komutları
+├── cli.py                   click tabanlı `scan` / `web` / `local-scan` / `visual-signature-scan` / `diff` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 

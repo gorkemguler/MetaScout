@@ -371,3 +371,89 @@ def test_history_skips_run_directories_without_report_json(tmp_path):
     os.makedirs(str(tmp_path / "web-20260101-100000"))  # no report.json inside
     html = client.get("/history").data.decode()
     assert "No scans yet" in html
+
+
+def test_history_shows_diff_form_only_with_two_or_more_runs(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+
+    html_zero = client.get("/history").data.decode()
+    assert 'name="a"' not in html_zero
+
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["example.com"])
+    html_one = client.get("/history").data.decode()
+    assert 'name="a"' not in html_one
+
+    _write_run(str(tmp_path), "web-20260102-100000", targets=["example.com"])
+    html_two = client.get("/history").data.decode()
+    assert 'name="a"' in html_two
+    assert 'name="b"' in html_two
+
+
+def test_diff_view_requires_both_params():
+    app = create_app()
+    client = app.test_client()
+    resp = client.get("/diff")
+    assert resp.status_code == 400
+
+
+def test_diff_view_404s_gracefully_for_unknown_run_ids(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    resp = client.get("/diff?a=no-such-run&b=also-fake")
+    assert resp.status_code == 400  # graceful error page, not a crash
+
+
+def test_diff_view_shows_no_changes_for_identical_reports(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["example.com"])
+    _write_run(str(tmp_path), "web-20260102-100000", targets=["example.com"])
+    resp = client.get("/diff?a=web-20260101-100000&b=web-20260102-100000")
+    assert resp.status_code == 200
+    assert "identical" in resp.data.decode().lower() or "aynı" in resp.data.decode().lower()
+
+
+def test_diff_view_shows_new_document(tmp_path):
+    import json
+    import os
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+
+    for run_id, docs in [
+        ("web-20260101-100000", [{"url": "https://example.com/a.pdf"}]),
+        ("web-20260102-100000", [{"url": "https://example.com/a.pdf"}, {"url": "https://example.com/new.pdf"}]),
+    ]:
+        run_dir = os.path.join(str(tmp_path), run_id)
+        os.makedirs(run_dir)
+        with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
+            json.dump({"targets": ["example.com"], "documents": docs, "documents_discovered": len(docs),
+                       "scanned_at": "2026-01-01", "findings": {}, "content_findings": []}, fh)
+        with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
+            fh.write("<html></html>")
+
+    resp = client.get("/diff?a=web-20260101-100000&b=web-20260102-100000")
+    assert resp.status_code == 200
+    assert "https://example.com/new.pdf" in resp.data.decode()
+
+
+def test_diff_view_escapes_run_id_in_heading(tmp_path):
+    # run_id is always server-generated in practice (a timestamp-based
+    # directory name from run_dir's own basename), but this is still a
+    # value that ends up in hand-built (non-Jinja) markup, so it must be
+    # escaped defensively regardless — verified here by actually creating
+    # a maliciously-named (but path-traversal-safe) run directory, since
+    # _resolve_run_path only rejects "/"/".."/etc., not arbitrary characters.
+    # No "/" in the payload — _resolve_run_path's path-traversal guard
+    # rejects any run_id containing one outright (a closing </script> tag
+    # would trip that, not the HTML-escaping this test is actually after).
+    evil_id = '<img src=x onerror=alert(1)>'
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    from urllib.parse import quote
+    _write_run(str(tmp_path), evil_id, targets=["example.com"])
+    _write_run(str(tmp_path), "web-20260102-100000", targets=["example.com"])
+    resp = client.get(f"/diff?a={quote(evil_id, safe='')}&b=web-20260102-100000")
+    assert resp.status_code == 200
+    assert evil_id not in resp.data.decode()
+    assert "&lt;img" in resp.data.decode()

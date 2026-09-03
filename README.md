@@ -382,6 +382,19 @@ and timestamp, newest first — with a "View report" link to reopen it and a
 "Download (.zip)" link, so past results are reachable from the browser
 alone without needing filesystem access to wherever `metascout web` is
 actually running.
+
+With two or more runs, the History page also has a **"Compare two runs"**
+form: pick an earlier and a later run and see exactly what's new (and
+what's gone) between them — new/removed documents, new/removed metadata
+findings per category, new/removed content-scan hits. For tracking a
+target over time: scan it periodically (into its own timestamped output
+directory each time, the default) and diff any two runs to see what
+changed. The same comparison is available from the CLI without a browser
+at all:
+
+```bash
+metascout diff metascout_output/web-20260101-100000 metascout_output/web-20260201-100000
+```
 ## Docker (web UI)
 
 For running the web UI without setting up Python/ExifTool/ImageMagick/
@@ -761,6 +774,7 @@ metascout scan --help
 metascout web --help
 metascout local-scan --help
 metascout visual-signature-scan --help
+metascout diff --help
 ```
 
 `metascout scan` takes one or more `TARGET` positional arguments
@@ -831,6 +845,21 @@ metascout visual-signature-scan --help
 | `REPORT_DIR` | – | A scan's output directory (contains `report.json`), e.g. `./metascout_output` or a `web-YYYYMMDD-HHMMSS` folder |
 | `--json-out` | `REPORT_DIR/visual_signature_report.json` | Where to write the results |
 
+`metascout diff RUN_A RUN_B` — compares two previous scan runs and prints
+what's new and what's gone between them (documents, metadata findings,
+content-scan hits). See the **"Compare two runs"** paragraph under
+[Web UI](#web-ui).
+
+```bash
+metascout diff --help
+```
+
+| Argument/Option | Default | Description |
+|---|---|---|
+| `RUN_A` | – | The earlier run's output directory (contains `report.json`) |
+| `RUN_B` | – | The later run's output directory (contains `report.json`) |
+| `--json-out` | – | Optional: also write the full diff as JSON to this path |
+
 ## Output layout
 
 ```
@@ -868,8 +897,9 @@ src/metascout/
 ├── report/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
+├── diff.py                  compares two report.json payloads (new/removed docs, findings, content hits)
 ├── pipeline.py              discover → download → extract → analyze flow (shared by CLI and web)
-├── cli.py                   click-based `scan` / `web` / `local-scan` / `visual-signature-scan` commands
+├── cli.py                   click-based `scan` / `web` / `local-scan` / `visual-signature-scan` / `diff` commands
 └── web.py                   Flask-based local web UI
 ```
 

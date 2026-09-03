@@ -162,6 +162,22 @@ _STRINGS = {
         "history_type_local": "Existing Documents",
         "history_view_label": "View report",
         "history_download_label": "Download (.zip)",
+        "diff_heading": "Compare two runs",
+        "diff_hint": "For tracking a target over time — pick an earlier and a later run to see what's "
+                     "new (and what's gone) between them.",
+        "diff_a_label": "Earlier run",
+        "diff_b_label": "Later run",
+        "diff_submit_label": "Compare",
+        "diff_error_need_two": "Pick two different runs to compare.",
+        "diff_page_title": "Diff",
+        "diff_no_changes": "No changes — these two reports are identical.",
+        "diff_new_label": "New",
+        "diff_removed_label": "Removed",
+        "diff_col_value": "Value",
+        "diff_col_docs": "Document(s)",
+        "diff_documents_heading": "Documents",
+        "diff_content_findings_heading": "Content scan hits",
+        "diff_back_to_history": "← Back to History",
     },
     "tr": {
         "tagline": "Belge keşfi &amp; metadata sızıntı analizi — yerel web arayüzü",
@@ -277,6 +293,22 @@ _STRINGS = {
         "history_type_local": "Mevcut Belgeler",
         "history_view_label": "Raporu görüntüle",
         "history_download_label": "İndir (.zip)",
+        "diff_heading": "İki çalıştırmayı karşılaştır",
+        "diff_hint": "Bir hedefi zaman içinde takip etmek için — daha erken ve daha geç bir "
+                     "çalıştırma seçin, aralarında ne yeni (ve ne kaybolmuş) görün.",
+        "diff_a_label": "Erken çalıştırma",
+        "diff_b_label": "Geç çalıştırma",
+        "diff_submit_label": "Karşılaştır",
+        "diff_error_need_two": "Karşılaştırmak için iki farklı çalıştırma seçin.",
+        "diff_page_title": "Fark",
+        "diff_no_changes": "Fark yok — bu iki rapor birebir aynı.",
+        "diff_new_label": "Yeni",
+        "diff_removed_label": "Kaybolan",
+        "diff_col_value": "Değer",
+        "diff_col_docs": "Belge(ler)",
+        "diff_documents_heading": "Belgeler",
+        "diff_content_findings_heading": "İçerik taraması bulguları",
+        "diff_back_to_history": "← Geçmişe dön",
     },
 }
 
@@ -742,9 +774,10 @@ def _list_scan_history(output_dir: str, *, limit: int = 100) -> list[dict]:
     return entries
 
 
-def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output") -> str:
+def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output", error: str | None = None) -> str:
     if ui_lang not in _STRINGS:
         ui_lang = "en"
+    error_block = f'<div class="error">{html.escape(error)}</div>' if error else ""
     runs = _list_scan_history(output_dir)
 
     if runs:
@@ -783,14 +816,142 @@ def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output")
     else:
         table = f'<p class="hint">{_t(ui_lang, "history_empty")}</p>'
 
+    diff_form = ""
+    if len(runs) >= 2:
+        # runs is newest-first; default "a" (earlier) to the oldest run and
+        # "b" (later) to the newest one, so hitting Compare with no changes
+        # gives the most common comparison ("everything since the first scan")
+        # instead of comparing a run against itself.
+        def _options(selected_id: str) -> str:
+            return "".join(
+                f'<option value="{html.escape(r["run_id"])}"'
+                + (" selected" if r["run_id"] == selected_id else "")
+                + f'>{html.escape(r["run_id"])}</option>'
+                for r in runs
+            )
+        options_a = _options(runs[-1]["run_id"])
+        options_b = _options(runs[0]["run_id"])
+        diff_form = (
+            f'<label style="margin-top:24px;">{_t(ui_lang, "diff_heading")}</label>'
+            f'<div class="hint" style="margin-bottom:10px;">{_t(ui_lang, "diff_hint")}</div>'
+            f'<form method="get" action="/diff">'
+            f'<input type="hidden" name="lang" value="{html.escape(ui_lang)}">'
+            '<div class="row">'
+            f'<div><label for="diff_a">{_t(ui_lang, "diff_a_label")}</label>'
+            f'<select id="diff_a" name="a">{options_a}</select></div>'
+            f'<div><label for="diff_b">{_t(ui_lang, "diff_b_label")}</label>'
+            f'<select id="diff_b" name="b">{options_b}</select></div>'
+            "</div>"
+            f'<button type="submit" style="margin-top:16px;">{_t(ui_lang, "diff_submit_label")}</button>'
+            "</form>"
+        )
+
     page_head = _render_page_head(ui_lang, "history")
     body = (
+        f"{error_block}"
         '<div class="card">'
         f'<p class="hint" style="margin-bottom:16px;">{_t(ui_lang, "history_intro")}</p>'
         f"{table}"
+        f"{diff_form}"
         "</div>"
     )
     return page_head + body + _PAGE_TAIL
+
+
+def _diff_value_table(ui_lang: str, values: list[str]) -> str:
+    if not values:
+        return ""
+    rows = "".join(f'<tr><td class="value">{html.escape(v)}</td></tr>' for v in values)
+    return (
+        '<div class="table-scroll"><table><thead><tr>'
+        f'<th>{_t(ui_lang, "diff_col_value")}</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    )
+
+
+def _diff_content_finding_table(values: list[dict]) -> str:
+    if not values:
+        return ""
+    rows = "".join(
+        "<tr>"
+        f'<td class="value">{html.escape(str(f.get("category", "")))}</td>'
+        f'<td class="value">{html.escape(str(f.get("masked_value", "")))}</td>'
+        f'<td class="doclist"><a href="{html.escape(str(f.get("document_url", "")))}" target="_blank" '
+        f'rel="noopener">{html.escape(str(f.get("document_url", "")))[:60]}</a></td>'
+        "</tr>"
+        for f in values
+    )
+    return f'<div class="table-scroll"><table><tbody>{rows}</tbody></table></div>'
+
+
+def _render_diff(ui_lang: str, output_dir: str, run_a: str, run_b: str) -> tuple[str, int]:
+    from .diff import FINDING_CATEGORIES, diff_reports, has_changes
+
+    if ui_lang not in _STRINGS:
+        ui_lang = "en"
+
+    path_a = _resolve_run_path(output_dir, run_a)
+    path_b = _resolve_run_path(output_dir, run_b)
+    if path_a is None or path_b is None:
+        return _render_history(ui_lang=ui_lang, output_dir=output_dir, error=_t(ui_lang, "diff_error_need_two")), 400
+
+    try:
+        with open(os.path.join(path_a, "report.json"), encoding="utf-8") as fh:
+            report_a = json.load(fh)
+        with open(os.path.join(path_b, "report.json"), encoding="utf-8") as fh:
+            report_b = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return _render_history(ui_lang=ui_lang, output_dir=output_dir, error=_t(ui_lang, "diff_error_need_two")), 400
+
+    result = diff_reports(report_a, report_b)
+
+    sections = []
+    if not has_changes(result):
+        sections.append(f'<p class="hint">{_t(ui_lang, "diff_no_changes")}</p>')
+    else:
+        docs = result["documents"]
+        if docs["new"] or docs["removed"]:
+            sections.append(f'<h3>{html.escape(_t(ui_lang, "diff_documents_heading"))}</h3>')
+            if docs["new"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_new_label")} ({len(docs["new"])})</div>')
+                sections.append(_diff_value_table(ui_lang, docs["new"]))
+            if docs["removed"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_removed_label")} ({len(docs["removed"])})</div>')
+                sections.append(_diff_value_table(ui_lang, docs["removed"]))
+
+        for cat in FINDING_CATEGORIES:
+            r = result["findings"][cat]
+            if not (r["new"] or r["removed"]):
+                continue
+            heading = html.escape(cat.replace("_", " ").title())
+            sections.append(f"<h3>{heading}</h3>")
+            if r["new"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_new_label")} ({len(r["new"])})</div>')
+                sections.append(_diff_value_table(ui_lang, r["new"]))
+            if r["removed"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_removed_label")} ({len(r["removed"])})</div>')
+                sections.append(_diff_value_table(ui_lang, r["removed"]))
+
+        cf = result["content_findings"]
+        if cf["new"] or cf["removed"]:
+            sections.append(f'<h3>{html.escape(_t(ui_lang, "diff_content_findings_heading"))}</h3>')
+            if cf["new"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_new_label")} ({len(cf["new"])})</div>')
+                sections.append(_diff_content_finding_table(cf["new"]))
+            if cf["removed"]:
+                sections.append(f'<div class="hint">{_t(ui_lang, "diff_removed_label")} ({len(cf["removed"])})</div>')
+                sections.append(_diff_content_finding_table(cf["removed"]))
+
+    page_head = _render_page_head(ui_lang, "history")
+    body = (
+        '<div class="card">'
+        f'<h1 style="font-size:16px;">{html.escape(_t(ui_lang, "diff_page_title"))}: '
+        f'{html.escape(run_a)} <span class="hint">&rarr;</span> {html.escape(run_b)}</h1>'
+        f'<p style="margin-top:16px;"><a href="/history?lang={html.escape(ui_lang)}">'
+        f'{html.escape(_t(ui_lang, "diff_back_to_history"))}</a></p>'
+        + "".join(sections)
+        + "</div>"
+    )
+    return page_head + body + _PAGE_TAIL, 200
 
 
 def create_app(output_dir: str = "./metascout_output") -> Flask:
@@ -1041,6 +1202,15 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             abort(404)
         with open(report_path, encoding="utf-8") as fh:
             return fh.read()
+
+    @app.get("/diff")
+    def diff_view():
+        ui_lang = _clean_ui_lang(request.args.get("lang"))
+        run_a = request.args.get("a", "")
+        run_b = request.args.get("b", "")
+        if not run_a or not run_b:
+            return _render_history(ui_lang=ui_lang, output_dir=output_dir, error=_t(ui_lang, "diff_error_need_two")), 400
+        return _render_diff(ui_lang, output_dir, run_a, run_b)
 
     return app
 

@@ -392,6 +392,80 @@ def local_scan(
 
 
 @main.command()
+@click.argument("run_a", type=click.Path(exists=True, file_okay=False))
+@click.argument("run_b", type=click.Path(exists=True, file_okay=False))
+@click.option("--json-out", type=click.Path(), default=None, help="Also write the full diff as JSON to this path.")
+def diff(run_a: str, run_b: str, json_out: str | None) -> None:
+    """Compares two scan output directories (each containing a report.json)
+    and shows what changed between them: new/removed documents, new/removed
+    metadata findings, new/removed content-scan hits.
+
+    RUN_A is treated as the earlier scan, RUN_B the later one — "new" means
+    "in RUN_B but not RUN_A". For tracking a target over time: run
+    `metascout scan` (or `local-scan`) periodically into timestamped
+    output directories, then diff any two of them.
+
+        metascout diff metascout_output/web-20260101-100000 metascout_output/web-20260201-100000
+    """
+    from .diff import FINDING_CATEGORIES, diff_reports, has_changes
+
+    def _load(run_dir: str) -> dict:
+        path = os.path.join(run_dir, "report.json")
+        if not os.path.isfile(path):
+            raise click.UsageError(f"No report.json found in {run_dir!r} — point this at a scan's output directory.")
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    report_a = _load(run_a)
+    report_b = _load(run_b)
+    result = diff_reports(report_a, report_b)
+
+    _print_banner()
+    console.print(f"[bold]Comparing[/bold] {run_a} [dim]->[/dim] {run_b}\n")
+
+    if not has_changes(result):
+        console.print("[green]No changes — the two reports are identical.[/green]")
+    else:
+        summary = Table(title="Diff summary")
+        summary.add_column("Category")
+        summary.add_column("New", justify="right")
+        summary.add_column("Removed", justify="right")
+        summary.add_row("Documents", str(len(result["documents"]["new"])), str(len(result["documents"]["removed"])))
+        for cat in FINDING_CATEGORIES:
+            r = result["findings"][cat]
+            if r["new"] or r["removed"]:
+                summary.add_row(cat.replace("_", " ").title(), str(len(r["new"])), str(len(r["removed"])))
+        summary.add_row(
+            "Content scan hits",
+            str(len(result["content_findings"]["new"])),
+            str(len(result["content_findings"]["removed"])),
+        )
+        console.print(summary)
+
+        if result["documents"]["new"]:
+            console.print("\n[bold green]New documents:[/bold green]")
+            for url in result["documents"]["new"]:
+                console.print(f"  + {url}")
+
+        for cat in FINDING_CATEGORIES:
+            r = result["findings"][cat]
+            if r["new"]:
+                console.print(f"\n[bold green]New {cat.replace('_', ' ')}:[/bold green]")
+                for value in r["new"]:
+                    console.print(f"  + {value}")
+
+        if result["content_findings"]["new"]:
+            console.print("\n[bold green]New content-scan hits (verify manually):[/bold green]")
+            for f in result["content_findings"]["new"]:
+                console.print(f"  + [{f.get('category')}] {f.get('masked_value')} — {f.get('document_url')}")
+
+    if json_out:
+        with open(json_out, "w", encoding="utf-8") as fh:
+            json.dump(result, fh, indent=2, ensure_ascii=False)
+        console.print(f"\n[green]Diff JSON:[/green] {json_out}")
+
+
+@main.command()
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=8765, show_default=True)
 @click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path())
