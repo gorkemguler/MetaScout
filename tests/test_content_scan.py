@@ -351,6 +351,74 @@ def test_extract_text_pdf_uses_pypdf_when_available(tmp_path):
     assert VALID_TC in text
 
 
+def test_extract_text_pdf_falls_back_to_ocr_on_short_page_text(tmp_path):
+    # A page with no/near-no real text (a scanned page) should get OCR'd,
+    # when the optional OCR dependency is available.
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\n")
+    fake_page = MagicMock()
+    fake_page.extract_text.return_value = ""  # scanned page: real text layer is empty
+    fake_reader = MagicMock()
+    fake_reader.is_encrypted = False
+    fake_reader.pages = [fake_page]
+    with patch.object(te, "PYPDF_AVAILABLE", True), patch.object(te, "PdfReader", return_value=fake_reader), \
+            patch.object(te, "OCR_AVAILABLE", True), \
+            patch.object(te, "ocr_pdf_page", return_value=f"Kimlik: {VALID_TC}") as mock_ocr:
+        text = te.extract_text(str(p), "pdf")
+    mock_ocr.assert_called_once_with(str(p), 0)
+    assert VALID_TC in text
+
+
+def test_extract_text_pdf_skips_ocr_when_unavailable(tmp_path):
+    p = tmp_path / "scanned.pdf"
+    p.write_bytes(b"%PDF-1.4\n")
+    fake_page = MagicMock()
+    fake_page.extract_text.return_value = ""
+    fake_reader = MagicMock()
+    fake_reader.is_encrypted = False
+    fake_reader.pages = [fake_page]
+    with patch.object(te, "PYPDF_AVAILABLE", True), patch.object(te, "PdfReader", return_value=fake_reader), \
+            patch.object(te, "OCR_AVAILABLE", False), \
+            patch.object(te, "ocr_pdf_page") as mock_ocr:
+        text = te.extract_text(str(p), "pdf")
+    mock_ocr.assert_not_called()
+    assert text == ""
+
+
+def test_extract_text_pdf_does_not_ocr_pages_with_real_text(tmp_path):
+    p = tmp_path / "real.pdf"
+    p.write_bytes(b"%PDF-1.4\n")
+    fake_page = MagicMock()
+    fake_page.extract_text.return_value = "This page has a real, substantial amount of extracted text already."
+    fake_reader = MagicMock()
+    fake_reader.is_encrypted = False
+    fake_reader.pages = [fake_page]
+    with patch.object(te, "PYPDF_AVAILABLE", True), patch.object(te, "PdfReader", return_value=fake_reader), \
+            patch.object(te, "OCR_AVAILABLE", True), \
+            patch.object(te, "ocr_pdf_page") as mock_ocr:
+        te.extract_text(str(p), "pdf")
+    mock_ocr.assert_not_called()
+
+
+# ---- OCR module --------------------------------------------------------------
+
+def test_ocr_pdf_page_returns_empty_without_dependencies(tmp_path):
+    from metascout.content_scan import ocr as ocr_module
+    p = tmp_path / "x.pdf"
+    p.write_bytes(b"%PDF-1.4\n")
+    with patch.object(ocr_module, "OCR_AVAILABLE", False):
+        assert ocr_module.ocr_pdf_page(str(p), 0) == ""
+
+
+def test_ocr_pdf_page_returns_empty_on_failure(tmp_path):
+    from metascout.content_scan import ocr as ocr_module
+    p = tmp_path / "x.pdf"
+    p.write_bytes(b"not a real pdf")
+    with patch.object(ocr_module, "OCR_AVAILABLE", True), \
+            patch.object(ocr_module, "WandImage", side_effect=RuntimeError("boom")):
+        assert ocr_module.ocr_pdf_page(str(p), 0) == ""
+
+
 # ---- signature structural check ---------------------------------------------
 
 def test_has_pdf_digital_signature_true_when_sig_field_present(tmp_path):
@@ -425,7 +493,8 @@ def test_scan_document_no_hits_when_text_empty_and_not_pdf(tmp_path):
 
 def test_missing_dependencies_lists_pypdf_when_unavailable():
     with patch("metascout.content_scan.PYPDF_AVAILABLE", False), \
-            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", True):
+            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", True), \
+            patch("metascout.content_scan.OCR_AVAILABLE", True):
         missing = missing_dependencies({"tc_kimlik"})
     assert any("pypdf" in m for m in missing)
     assert not any("phonenumbers" in m for m in missing)
@@ -433,7 +502,24 @@ def test_missing_dependencies_lists_pypdf_when_unavailable():
 
 def test_missing_dependencies_lists_phonenumbers_only_when_email_phone_requested():
     with patch("metascout.content_scan.PYPDF_AVAILABLE", True), \
-            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", False):
+            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", False), \
+            patch("metascout.content_scan.OCR_AVAILABLE", True):
         assert not missing_dependencies({"tc_kimlik"})
         missing = missing_dependencies({"email_phone"})
     assert any("phonenumbers" in m for m in missing)
+
+
+def test_missing_dependencies_lists_ocr_when_unavailable():
+    with patch("metascout.content_scan.PYPDF_AVAILABLE", True), \
+            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", True), \
+            patch("metascout.content_scan.OCR_AVAILABLE", False):
+        missing = missing_dependencies({"tc_kimlik"})
+    assert any("pytesseract" in m or "OCR" in m for m in missing)
+
+
+def test_missing_dependencies_no_ocr_entry_when_available():
+    with patch("metascout.content_scan.PYPDF_AVAILABLE", True), \
+            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", True), \
+            patch("metascout.content_scan.OCR_AVAILABLE", True):
+        missing = missing_dependencies({"tc_kimlik"})
+    assert missing == []

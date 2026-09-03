@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from . import pii_patterns as pii
+from .ocr import OCR_AVAILABLE
 from .signature import PYPDF_AVAILABLE, has_pdf_digital_signature
 from .text_extract import extract_text
 from .visual_signature import SIGNATURE_DETECT_AVAILABLE, detect_visual_signature
@@ -30,6 +31,11 @@ def missing_dependencies(categories: set[str], *, visual_signature: bool = False
         missing.append(
             "signature-detect (visual signature detection — also needs ImageMagick "
             "and Ghostscript installed system-wide, not just the pip package)"
+        )
+    if not OCR_AVAILABLE:
+        missing.append(
+            "pytesseract/Wand (OCR fallback for scanned/image-only PDF pages — optional, "
+            "also needs Tesseract, ImageMagick, and Ghostscript installed system-wide)"
         )
     return missing
 

@@ -46,6 +46,24 @@ visual-signature = [
     "signature-detect>=0.1.4",
 ]
 
+# Opt-in OCR fallback for --scan-content: when a PDF page's real text layer
+# extracts to (near-)nothing — a scanned/image-only page, e.g. a scanned
+# contract or ID card with no text at all — rasterizes that page and OCRs
+# it with Tesseract instead, so content scanning (PII/secrets/infra
+# detection) isn't blind to scanned documents. Same rasterization technique
+# as visual-signature (Wand -> ImageMagick -> Ghostscript), plus Tesseract
+# OCR itself — also needs those installed system-wide, not just this pip
+# package. Kept as its own extra since it's a materially different
+# capability from visual-signature (this feeds text-based detection, that
+# one looks at pixels directly) even though the rasterization step is
+# shared conceptually. Automatic once installed: no extra CLI flag needed,
+# --scan-content just gets better coverage on scanned PDFs.
+ocr = [
+    "pytesseract>=0.3",
+    "Wand>=0.6",
+    "Pillow>=10.0",
+]
+
 [project.scripts]
 metascout = "metascout.cli:main"
 

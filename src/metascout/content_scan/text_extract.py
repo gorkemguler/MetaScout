@@ -3,6 +3,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 import zipfile
 
+from .ocr import OCR_AVAILABLE, OCR_TEXT_THRESHOLD, ocr_pdf_page
+
 try:
     from pypdf import PdfReader
     PYPDF_AVAILABLE = True
@@ -48,11 +50,21 @@ def _extract_pdf(local_path: str) -> str:
         except Exception:
             return ""
     parts = []
-    for page in reader.pages:
+    for i, page in enumerate(reader.pages):
         try:
-            parts.append(page.extract_text() or "")
+            text = page.extract_text() or ""
         except Exception:
-            continue
+            text = ""
+        # A short/empty extraction usually means a scanned, image-only page
+        # (no text layer at all) rather than a genuinely near-blank one —
+        # confirmed live: a real 3-line scanned page extracted to "" via
+        # pypdf. OCR it as a fallback, but only if the optional [ocr] extra
+        # (+ Tesseract/ImageMagick/Ghostscript installed system-wide) is
+        # actually available; otherwise this page just contributes nothing,
+        # same as before OCR support existed.
+        if len(text.strip()) < OCR_TEXT_THRESHOLD and OCR_AVAILABLE:
+            text = (text + "\n" + ocr_pdf_page(local_path, i)).strip()
+        parts.append(text)
     return "\n".join(parts)
 
 

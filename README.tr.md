@@ -43,6 +43,7 @@
 - [Subdomain taraması](#subdomain-taraması)
 - [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
   - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)
+  - [Taranmış belgeler için OCR](#taranmış-belgeler-için-ocr)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -675,6 +676,40 @@ Açmadan önce bilmekte fayda var:
   [ghostscript.com](https://www.ghostscript.com/releases/gsdnld.html)
   adreslerindeki resmi Windows kurulum dosyaları.
 
+### Taranmış belgeler için OCR
+
+`--scan-content`'in PII/secret/altyapı tespiti PDF'in gerçek metin
+katmanını okur — **taranmış** bir sayfanın (bir kimlik fotokopisi, fotoğrafı
+çekilmiş ya da tarayıcıdan geçirilmiş imzalı bir sözleşme) genelde hiç metin
+katmanı yoktur, bu yüzden içerik taraması bu tür belgelere tamamen kördü.
+`pip install 'metascout[ocr]'` bunu çözer: bir sayfanın çıkarılan metni
+~20 karakterin altına düşerse (gerçekten neredeyse-boş değil, taranmış
+olduğuna dair güçlü bir sinyal), o sayfa görüntüye çevrilip
+[Tesseract](https://github.com/tesseract-ocr/tesseract) OCR ile taranır ve
+sonuç normal metinle aynı dedektörlere beslenir.
+
+```bash
+pip install 'metascout[ocr]'
+metascout scan example.com --scan-content   # ekstra bayrak yok — OCR otomatik devreye girer
+```
+
+Ayrı bir CLI bayrağı yok: bu, ek paket (artı sistemde kurulu Tesseract,
+ImageMagick ve Ghostscript — [görsel imza
+tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)'yle aynı
+rasterizasyon tekniği) kullanılabilir olduğunda otomatik çalışır. Değilse,
+taranmış sayfalar OCR desteği eklenmeden önceki gibi basitçe atlanır —
+her iki durumda da hiçbir şey bozulmaz.
+
+**Canlı uçtan uca doğrulandı**: gerçek metin içeren ama hiç metin katmanı
+olmayan sentetik bir taranmış PDF oluşturdum (pypdf'in kendi çıkarımı boş
+döndü), OCR'dan geçirdim, ve görüntüye gömülü checksum-doğrulamalı bir TC
+kimlik numarası doğru şekilde bulunup işaretlendi. Bunun dürüst bir
+sınırını da doğruladım: OCR metni gürültülü, aynı testteki bir e-posta
+adresi araya sıkışan bir boşlukla geri geldi (`jane.doe @example.com`),
+bu da e-posta regex'ini atlatmaya yetti — OCR kaynaklı bulguları, hiçbir
+şey bulamamaya göre gerçek bir iyileşme olarak görün, gerçek bir metin
+katmanınınki kadar güvenilir değil.
+
 ## Arama motoru API anahtarları (opsiyonel)
 
 `google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
@@ -838,7 +873,8 @@ src/metascout/
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument metin çıkarımı
 │   ├── pii_patterns.py     TC no/IBAN/kart checksum doğrulayıcıları, e-posta/telefon/doğum tarihi/adres/imza regex'i
 │   ├── signature.py        PDF dijital imza (/Sig alanı) yapısal kontrolü
-│   └── visual_signature.py  opsiyonel görüntü-tabanlı imza tespiti (--visual-signature)
+│   ├── visual_signature.py  opsiyonel görüntü-tabanlı imza tespiti (--visual-signature)
+│   └── ocr.py               taranmış PDF sayfaları için opsiyonel OCR fallback (kurulunca otomatik)
 ├── report/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON rapor

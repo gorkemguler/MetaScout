@@ -1,11 +1,12 @@
 # MetaScout — web UI image.
 #
 # Bundles everything the *optional* extras need too (content-scan,
-# visual-signature) so the image works fully out of the box, no separate
+# visual-signature, ocr) so the image works fully out of the box, no separate
 # `pip install` step for anyone using it. That does mean this is a heavier
 # image than a bare-metal `pip install metascout` (ImageMagick + Ghostscript
-# alone add ~150-250MB) — a deliberate "batteries included" tradeoff for a
-# container people pull/build once rather than manage dependencies for.
+# alone add ~150-250MB, Tesseract another chunk on top) — a deliberate
+# "batteries included" tradeoff for a container people pull/build once
+# rather than manage dependencies for.
 #
 # Build:  docker build -t metascout .
 # Run:    docker run --rm -p 127.0.0.1:8765:8765 -v "$(pwd)/metascout_output:/data" metascout
@@ -20,11 +21,15 @@ LABEL org.opencontainers.image.title="MetaScout" \
       org.opencontainers.image.licenses="MIT"
 
 # - libimage-exiftool-perl: required for all metadata extraction (core feature, not optional)
-# - imagemagick + ghostscript: required for --visual-signature (see README) —
-#   included here so it works without a second manual install step; Wand
-#   (the Python binding) delegates PDF rasterization to Ghostscript
-#   specifically, ImageMagick alone isn't enough (confirmed while building
-#   that feature — see the "Visual (wet) signature detection" README section).
+# - imagemagick + ghostscript: required for --visual-signature and the OCR
+#   fallback (see README) — included here so both work without a second
+#   manual install step; Wand (the Python binding) delegates PDF
+#   rasterization to Ghostscript specifically, ImageMagick alone isn't
+#   enough (confirmed while building that feature — see the "Visual (wet)
+#   signature detection" README section).
+# - tesseract-ocr: the OCR engine itself, used automatically as a fallback
+#   for scanned/image-only PDF pages when --scan-content runs (no separate
+#   flag — just needs the [ocr] extra + this binary to be present).
 # - build-essential: opencv-python/scikit-image/numpy (visual-signature's
 #   own dependencies) ship prebuilt wheels for most platforms, but not
 #   reliably every one (e.g. some arm64 hosts) — kept as a fallback so the
@@ -34,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libimage-exiftool-perl \
         imagemagick \
         ghostscript \
+        tesseract-ocr \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,7 +50,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-RUN pip install --no-cache-dir '.[content-scan,visual-signature]'
+RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr]'
 
 # Scan output (report.html/report.json/downloads/) lives here — mount a
 # volume at /data to get results back out onto the host and keep them

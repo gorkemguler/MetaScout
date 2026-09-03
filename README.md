@@ -43,6 +43,7 @@
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
   - [Visual (wet) signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
+  - [OCR fallback for scanned documents](#ocr-fallback-for-scanned-documents)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -661,6 +662,38 @@ Other things worth knowing before turning this on:
   Windows installers from [imagemagick.org](https://imagemagick.org/script/download.php#windows)
   and [ghostscript.com](https://www.ghostscript.com/releases/gsdnld.html).
 
+### OCR fallback for scanned documents
+
+`--scan-content`'s PII/secrets/infra detection reads a PDF's real text
+layer — a **scanned** page (an ID card, a signed contract photographed or
+run through a copier) usually has none at all, so content scanning was
+completely blind to it. `pip install 'metascout[ocr]'` fixes that: when a
+page's extracted text comes back under ~20 characters (a strong signal it's
+scanned rather than genuinely near-blank), that page gets rasterized and
+run through [Tesseract](https://github.com/tesseract-ocr/tesseract) OCR
+instead, and the result feeds into the same detectors as normal text.
+
+```bash
+pip install 'metascout[ocr]'
+metascout scan example.com --scan-content   # no extra flag — OCR just kicks in automatically
+```
+
+No separate CLI flag: this is automatic once the extra (plus Tesseract,
+ImageMagick, and Ghostscript installed system-wide — same rasterization
+technique as [visual signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
+above) is available. If it isn't, scanned pages are simply skipped, same as
+before OCR support existed — nothing breaks either way.
+
+**Live-verified end to end**: built a synthetic scanned PDF (an image
+containing real text, no text layer at all — pypdf's own extraction on it
+confirmed empty), ran it through OCR, and a checksum-verified national ID
+number embedded in the image was correctly recovered and flagged. Also
+confirmed the honest limit of this: OCR text is noisy, and an email address
+in the same test came back with a stray space inserted
+(`jane.doe @example.com`), enough to dodge the email regex — treat OCR-sourced
+hits as a genuine improvement over finding nothing, not as reliable as a
+real text layer's.
+
 ## Search engine API keys (optional)
 
 The `google`, `serper`, and `brave` engines run classic FOCA-style
@@ -823,7 +856,8 @@ src/metascout/
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument text extraction
 │   ├── pii_patterns.py     TC no./IBAN/card checksum validators, email/phone/DOB/address/signature regex
 │   ├── signature.py        PDF digital-signature (/Sig field) structural check
-│   └── visual_signature.py  opt-in image-based signature detection (--visual-signature)
+│   ├── visual_signature.py  opt-in image-based signature detection (--visual-signature)
+│   └── ocr.py               opt-in OCR fallback for scanned PDF pages (automatic once installed)
 ├── report/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
 │   └── json_report.py      JSON report
