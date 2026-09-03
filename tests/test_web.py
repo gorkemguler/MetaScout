@@ -307,3 +307,67 @@ def test_download_cannot_escape_output_dir_via_sibling_prefix(tmp_path):
     (tmp_path / "metascout_output_evil" / "secret.txt").write_text("nope")
     resp = client.get("/download/../metascout_output_evil")
     assert resp.status_code == 404
+
+
+def _write_run(output_dir, run_id, *, targets, documents=1, scanned_at="2026-01-01T10:00:00+00:00", html_body="report"):
+    import json
+    import os
+    run_dir = os.path.join(output_dir, run_id)
+    os.makedirs(run_dir, exist_ok=True)
+    with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
+        json.dump({"targets": targets, "documents_discovered": documents, "scanned_at": scanned_at}, fh)
+    with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
+        fh.write(f"<html><body>{html_body}</body></html>")
+
+
+def test_history_empty_shows_friendly_message(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    html = client.get("/history").data.decode()
+    assert "No scans yet" in html
+
+
+def test_history_lists_runs_newest_first(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["a.example.com"])
+    _write_run(str(tmp_path), "web-20260102-100000", targets=["b.example.com"])
+    html = client.get("/history").data.decode()
+    assert "web-20260101-100000" in html
+    assert "web-20260102-100000" in html
+    # newer run should appear first in the raw HTML
+    assert html.index("web-20260102-100000") < html.index("web-20260101-100000")
+
+
+def test_history_view_serves_stored_report_html(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["example.com"], html_body="unique marker 12345")
+    resp = client.get("/history/web-20260101-100000")
+    assert resp.status_code == 200
+    assert "unique marker 12345" in resp.data.decode()
+
+
+def test_history_view_404s_for_unknown_or_traversal_run_id(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    assert client.get("/history/no-such-run").status_code == 404
+    assert client.get("/history/../etc").status_code == 404
+
+
+def test_history_escapes_target_values_to_prevent_xss(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["<script>alert(1)</script>"])
+    html = client.get("/history").data.decode()
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_history_skips_run_directories_without_report_json(tmp_path):
+    import os
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    os.makedirs(str(tmp_path / "web-20260101-100000"))  # no report.json inside
+    html = client.get("/history").data.decode()
+    assert "No scans yet" in html

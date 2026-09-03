@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import io
 import json
 import os
@@ -146,6 +147,21 @@ _STRINGS = {
         "local_error_both_sources": "Provide only one of directory path or URL list, not both.",
         "local_error_dir_not_found": "That directory doesn't exist or isn't readable from this machine.",
         "local_submit_label": "Analyze documents",
+        "nav_history_label": "History",
+        "history_intro": "Past scan runs saved under this server's output directory — reopen a "
+                          "report or grab its zip without needing filesystem access to wherever "
+                          "<code>metascout web</code> is running.",
+        "history_empty": "No scans yet. Runs show up here once one finishes.",
+        "history_col_run": "Run",
+        "history_col_type": "Type",
+        "history_col_targets": "Target(s)",
+        "history_col_docs": "Documents",
+        "history_col_scanned": "Scanned",
+        "history_col_actions": "",
+        "history_type_scan": "Discover & Scan",
+        "history_type_local": "Existing Documents",
+        "history_view_label": "View report",
+        "history_download_label": "Download (.zip)",
     },
     "tr": {
         "tagline": "Belge keşfi &amp; metadata sızıntı analizi — yerel web arayüzü",
@@ -246,6 +262,21 @@ _STRINGS = {
         "local_error_both_sources": "Dizin yolu ya da URL listesinden yalnızca birini girin, ikisini birden değil.",
         "local_error_dir_not_found": "Bu dizin yok ya da bu makineden okunamıyor.",
         "local_submit_label": "Belgeleri analiz et",
+        "nav_history_label": "Geçmiş",
+        "history_intro": "Bu sunucunun çıktı dizininde kayıtlı önceki tarama çalıştırmaları — "
+                          "<code>metascout web</code>'in çalıştığı yere dosya sistemi erişimi "
+                          "gerekmeden bir raporu yeniden açın ya da zip'ini indirin.",
+        "history_empty": "Henüz tarama yok. Bir tarama bitince burada görünür.",
+        "history_col_run": "Çalıştırma",
+        "history_col_type": "Tür",
+        "history_col_targets": "Hedef(ler)",
+        "history_col_docs": "Belge",
+        "history_col_scanned": "Tarih",
+        "history_col_actions": "",
+        "history_type_scan": "Hedef Keşfet & Tara",
+        "history_type_local": "Mevcut Belgeler",
+        "history_view_label": "Raporu görüntüle",
+        "history_download_label": "İndir (.zip)",
     },
 }
 
@@ -351,6 +382,7 @@ function metascoutStartScan() {{
     <div class="page-nav">
       <a href="/?lang={ui_lang}" class="{nav_scan_active}">{nav_scan_label}</a>
       <a href="/local-scan?lang={ui_lang}" class="{nav_local_active}">{nav_local_label}</a>
+      <a href="/history?lang={ui_lang}" class="{nav_history_active}">{nav_history_label}</a>
     </div>
   </div>
   <div class="lang-switch">
@@ -451,9 +483,10 @@ _FORM_BODY = """
 
 
 def _render_page_head(ui_lang: str, current_page: str) -> str:
-    """current_page is "scan" or "local" — drives both which nav link is
-    highlighted and which page the EN/TR language switcher stays on."""
-    base_path = "/local-scan" if current_page == "local" else "/"
+    """current_page is "scan", "local", or "history" — drives both which
+    nav link is highlighted and which page the EN/TR language switcher
+    stays on."""
+    base_path = {"local": "/local-scan", "history": "/history"}.get(current_page, "/")
     return _PAGE_HEAD.format(
         ui_lang=ui_lang,
         tagline=_t(ui_lang, "tagline"),
@@ -462,8 +495,10 @@ def _render_page_head(ui_lang: str, current_page: str) -> str:
         tr_active="active" if ui_lang == "tr" else "",
         nav_scan_label=_t(ui_lang, "nav_scan_label"),
         nav_local_label=_t(ui_lang, "nav_local_label"),
+        nav_history_label=_t(ui_lang, "nav_history_label"),
         nav_scan_active="active" if current_page == "scan" else "",
         nav_local_active="active" if current_page == "local" else "",
+        nav_history_active="active" if current_page == "history" else "",
     )
 
 
@@ -652,6 +687,110 @@ def _render_local_form(
 
 def _clean_ui_lang(value: str | None) -> str:
     return value if value in _STRINGS else "en"
+
+
+def _resolve_run_path(output_dir: str, run_id: str) -> str | None:
+    """Validates run_id (always server-generated — a run directory's own
+    basename, like "web-20260101-120000" — but still untrusted once it
+    comes back on a request) and returns its real, verified path if it's
+    an actual directory inside output_dir, or None otherwise. Shared by
+    every route that serves a stored run's files (/download, /history/<id>)
+    so the path-traversal guard can't drift between them.
+    """
+    if not run_id or run_id in (".", "..") or "/" in run_id or "\\" in run_id:
+        return None
+    base = os.path.realpath(output_dir)
+    run_path = os.path.realpath(os.path.join(base, run_id))
+    if run_path != base and not run_path.startswith(base + os.sep):
+        return None
+    if not os.path.isdir(run_path):
+        return None
+    return run_path
+
+
+def _list_scan_history(output_dir: str, *, limit: int = 100) -> list[dict]:
+    """Scans output_dir for past run directories (anything with a
+    report.json next to it — written by both /scan and /local-scan, and by
+    the CLI's own `metascout scan`/`local-scan` when pointed at the same
+    directory) and returns lightweight summaries, newest first. Run
+    directory names are timestamp-sortable strings
+    ("web-20260101-120000"/"local-..."), so a plain reverse string sort is
+    already chronological — no need to parse dates out of them.
+    """
+    if not os.path.isdir(output_dir):
+        return []
+    entries = []
+    for name in sorted(os.listdir(output_dir), reverse=True):
+        run_path = os.path.join(output_dir, name)
+        report_json_path = os.path.join(run_path, "report.json")
+        if not os.path.isfile(report_json_path):
+            continue
+        try:
+            with open(report_json_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        entries.append({
+            "run_id": name,
+            "kind": "local" if name.startswith("local-") else "scan",
+            "targets": data.get("targets", []),
+            "documents": data.get("documents_discovered", 0),
+            "scanned_at": data.get("scanned_at", ""),
+        })
+        if len(entries) >= limit:
+            break
+    return entries
+
+
+def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output") -> str:
+    if ui_lang not in _STRINGS:
+        ui_lang = "en"
+    runs = _list_scan_history(output_dir)
+
+    if runs:
+        rows = []
+        for run in runs:
+            # run_id is always server-generated (a directory basename); the
+            # rest — targets especially — ultimately comes from a scan
+            # form field a user typed, stored in that run's report.json and
+            # read back here, so every value needs HTML-escaping before
+            # going into this hand-built markup (there's no Jinja
+            # autoescaping backing this page, unlike the report templates).
+            run_id = html.escape(run["run_id"])
+            type_label = html.escape(_t(ui_lang, "history_type_local" if run["kind"] == "local" else "history_type_scan"))
+            targets_raw = ", ".join(run["targets"][:3]) + (" …" if len(run["targets"]) > 3 else "")
+            targets = html.escape(targets_raw)
+            documents = html.escape(str(run["documents"]))
+            scanned_at = html.escape(run["scanned_at"])
+            rows.append(
+                "<tr>"
+                f'<td class="value">{run_id}</td>'
+                f"<td>{type_label}</td>"
+                f'<td class="value">{targets}</td>'
+                f'<td class="count">{documents}</td>'
+                f'<td class="doclist">{scanned_at}</td>'
+                f'<td><a href="/history/{run_id}">{html.escape(_t(ui_lang, "history_view_label"))}</a>'
+                f' &middot; <a href="/download/{run_id}" download>{html.escape(_t(ui_lang, "history_download_label"))}</a></td>'
+                "</tr>"
+            )
+        table = (
+            '<div class="table-scroll"><table><thead><tr>'
+            f'<th>{_t(ui_lang, "history_col_run")}</th><th>{_t(ui_lang, "history_col_type")}</th>'
+            f'<th>{_t(ui_lang, "history_col_targets")}</th><th>{_t(ui_lang, "history_col_docs")}</th>'
+            f'<th>{_t(ui_lang, "history_col_scanned")}</th><th>{_t(ui_lang, "history_col_actions")}</th>'
+            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        )
+    else:
+        table = f'<p class="hint">{_t(ui_lang, "history_empty")}</p>'
+
+    page_head = _render_page_head(ui_lang, "history")
+    body = (
+        '<div class="card">'
+        f'<p class="hint" style="margin-bottom:16px;">{_t(ui_lang, "history_intro")}</p>'
+        f"{table}"
+        "</div>"
+    )
+    return page_head + body + _PAGE_TAIL
 
 
 def create_app(output_dir: str = "./metascout_output") -> Flask:
@@ -871,13 +1010,8 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         still validated defensively here since it arrives back as untrusted
         user input on this request.
         """
-        base = os.path.realpath(output_dir)
-        if not run_id or run_id in (".", "..") or "/" in run_id or "\\" in run_id:
-            abort(404)
-        run_path = os.path.realpath(os.path.join(base, run_id))
-        if run_path != base and not run_path.startswith(base + os.sep):
-            abort(404)
-        if not os.path.isdir(run_path):
+        run_path = _resolve_run_path(output_dir, run_id)
+        if run_path is None:
             abort(404)
 
         buffer = io.BytesIO()
@@ -891,6 +1025,22 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             buffer, mimetype="application/zip", as_attachment=True,
             download_name=f"metascout-{run_id}.zip",
         )
+
+    @app.get("/history")
+    def history_index():
+        ui_lang = _clean_ui_lang(request.args.get("lang"))
+        return _render_history(ui_lang=ui_lang, output_dir=output_dir)
+
+    @app.get("/history/<run_id>")
+    def history_view(run_id: str):
+        run_path = _resolve_run_path(output_dir, run_id)
+        if run_path is None:
+            abort(404)
+        report_path = os.path.join(run_path, "report.html")
+        if not os.path.isfile(report_path):
+            abort(404)
+        with open(report_path, encoding="utf-8") as fh:
+            return fh.read()
 
     return app
 

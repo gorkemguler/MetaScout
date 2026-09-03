@@ -377,6 +377,14 @@ taraması ve görsel imza kontrolleri, ana form ile aynı. Bunu bilerek ayrı
 bir sayfada tuttuk, ana forma sıkıştırmak yerine — çünkü ana form zaten daha
 fazla tarama seçeneği eklendikçe okunması zorlaşıyordu.
 
+**"Geçmiş"** (üst navigasyon) `--output-dir` altında kayıtlı her önceki
+çalıştırmayı listeler (hem `metascout scan`/`local-scan` çalıştırmaları hem
+web UI çalıştırmaları — aynı `report.json`/`report.html` dosyalarını
+yazdıkları için) — hedef(ler), belge sayısı ve tarih, en yeniden eskiye —
+raporu yeniden açmak için bir "Raporu görüntüle" linki ve "İndir (.zip)"
+linki ile birlikte, böylece geçmiş sonuçlara `metascout web`'in gerçekte
+çalıştığı yere dosya sistemi erişimi gerekmeden, sadece tarayıcıdan
+ulaşılabilir.
 ## Docker (web arayüzü)
 
 Python/ExifTool/ImageMagick/Ghostscript'i elle kurmadan web arayüzünü

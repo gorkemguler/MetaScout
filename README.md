@@ -375,6 +375,13 @@ content-scan and visual-signature checks, same as the main form. It's kept
 on its own page rather than crammed into the main form specifically to keep
 that one from getting harder to read as more scan options get added.
 
+**"History"** (top nav) lists every past run saved under `--output-dir`
+(both `metascout scan`/`local-scan` runs and web UI runs, since they write
+the same `report.json`/`report.html` files) — target(s), document count,
+and timestamp, newest first — with a "View report" link to reopen it and a
+"Download (.zip)" link, so past results are reachable from the browser
+alone without needing filesystem access to wherever `metascout web` is
+actually running.
 ## Docker (web UI)
 
 For running the web UI without setting up Python/ExifTool/ImageMagick/
