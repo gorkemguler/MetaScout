@@ -466,13 +466,17 @@ curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
 | `--port` | `8000` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Her job'ın `report.json`/`report.html`/`downloads/`'unun kaydedileceği yer (job başına bir alt klasör, CLI/web arayüzüyle aynı düzen) |
 | `--max-workers` | `2` | Aynı anda gerçekten çalışan azami tarama sayısı; fazlası kuyruğa girip sırasını bekler |
+| `--max-pending` | `50` | Aynı anda kuyrukta/çalışan azami tarama sayısı; bunun üzerinde `POST /v1/scans`/`local-scans` `429` döner |
 
 Job takibi (durum, devam eden log satırları) **sadece bellekte** tutulur —
 sunucu yeniden başlatıldığında kaybolur. Bitmiş bir job'ın
 `report.json`/`report.html`'i yine de `--output-dir` altına diskte güvenle
 yazılır, tam olarak CLI/web arayüzündeki gibi — bu yüzden bir yeniden
 başlatma asla **tamamlanmış** bir sonucu kaybettirmez, sadece o an
-kuyrukta/çalışmakta olan işlerin canlı durumunu.
+kuyrukta/çalışmakta olan işlerin canlı durumunu. `--max-pending`, aynı anda
+kaç job'ın kuyrukta/çalışır durumda olabileceğini sınırlar (bunun üzerinde
+`POST /v1/scans`/`local-scans` `429` döner) — böylece bir çağıran bu
+bellek-içi kaydı sınırsızca büyütemez.
 
 > ⚠️ **Kimlik doğrulama yerleşik değil**, [Web arayüzü](#web-arayüzü) ve
 > [Docker](#docker) imajıyla aynı duruş: kendi makinenizde ya da güvenilir
@@ -996,6 +1000,7 @@ metascout diff --help
 | `--port` | `8000` | Dinlenecek port |
 | `--output-dir` | `./metascout_output` | Her job'ın rapor/indirmelerinin kaydedileceği yer |
 | `--max-workers` | `2` | Aynı anda çalışan azami tarama sayısı |
+| `--max-pending` | `50` | Aynı anda kuyrukta/çalışan azami tarama sayısı; bunun üzerinde `429` döner |
 
 `metascout local-scan DIRECTORY` — `DIRECTORY`'de (özyinelemeli aranır)
 zaten bulunan belgeleri analiz eder: keşif yok, indirme yok, sadece

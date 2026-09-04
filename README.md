@@ -461,13 +461,16 @@ curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
 | `--port` | `8000` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where each job's `report.json`/`report.html`/`downloads/` get saved (one subfolder per job, same layout as the CLI/web UI) |
 | `--max-workers` | `2` | Maximum scans actually running at once; extra jobs queue and wait their turn |
+| `--max-pending` | `50` | Maximum scans queued or running at once; `POST /v1/scans`/`local-scans` returns `429` past this |
 
 Job tracking (status, in-progress log lines) is **in-memory only** — it
 doesn't survive a server restart. A finished job's `report.json`/
 `report.html` are still safely written to disk under `--output-dir` the
 whole time, same as the CLI/web UI, so a restart never loses a *completed*
 result — only the live status of whatever was still queued/running at that
-moment.
+moment. `--max-pending` caps how many jobs can be queued/running at once
+(`POST /v1/scans`/`local-scans` returns `429` past that) so a caller can't
+grow this in-memory registry without limit.
 
 > ⚠️ **No built-in authentication**, same posture as the [Web UI](#web-ui)
 > and the [Docker](#docker) image: fine on your own machine or inside a
@@ -972,6 +975,7 @@ metascout diff --help
 | `--port` | `8000` | Port to listen on |
 | `--output-dir` | `./metascout_output` | Where each job's report/downloads get saved |
 | `--max-workers` | `2` | Maximum scans running at the same time |
+| `--max-pending` | `50` | Maximum scans queued or running at once; `POST /v1/scans` returns `429` past this — bounds memory use against an unauthenticated caller submitting jobs in a loop |
 
 `metascout local-scan DIRECTORY` — analyzes documents already sitting in
 `DIRECTORY` (searched recursively): no discovery, no download, just

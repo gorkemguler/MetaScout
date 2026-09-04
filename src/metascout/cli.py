@@ -3,14 +3,12 @@ from __future__ import annotations
 import json
 import os
 import sys
-from urllib.parse import urlparse
-
 import click
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig
+from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig, default_engines, hosts_of
 from .pipeline import run_scan
 from .report import render_html_report, render_json_report
 
@@ -81,20 +79,13 @@ def _print_summary(findings) -> None:
         console.print(critical_table)
 
 
-def _default_engines() -> str:
-    """crawl+sitemap+wayback+ddgs always (all free, no API key needed);
-    auto-add google/serper/brave when their API keys are already configured
-    (env var or .env), so setting up a key is enough to use it without also
-    remembering to pass --engines.
+def _default_engines_csv() -> str:
+    """Click needs a comma-joined string default for --engines (parsed back
+    into a list in scan()'s body); config.default_engines() returns the list
+    directly, shared with the REST API. See that function for the actual
+    auto-detection logic.
     """
-    engines = ["crawl", "sitemap", "wayback", "ddgs"]
-    if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
-        engines.append("google")
-    if os.environ.get("SERPER_API_KEY"):
-        engines.append("serper")
-    if os.environ.get("BRAVE_API_KEY"):
-        engines.append("brave")
-    return ",".join(engines)
+    return ",".join(default_engines())
 
 
 def _collect_targets(targets: tuple[str, ...], targets_file: str | None) -> list[str]:
@@ -120,15 +111,6 @@ def _collect_urls(urls_file: str | None) -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-def _hosts_of(urls: list[str]) -> list[str]:
-    hosts = []
-    for u in urls:
-        host = urlparse(u).netloc
-        if host:
-            hosts.append(host)
-    return sorted(set(hosts))
-
-
 @click.group()
 def main() -> None:
     """MetaScout — document discovery and metadata reconnaissance tool."""
@@ -143,7 +125,7 @@ def main() -> None:
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--urls-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one full document URL per line to scan directly (# comments allowed) — e.g. links you gathered by hand when an engine didn't work. Skips discovery for those URLs; still downloaded, analyzed, and included in the report like any other result.")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default=_default_engines, help="Comma-separated: crawl,sitemap,wayback,ddgs,google,serper,brave. Defaults to crawl,sitemap,wayback,ddgs plus google/serper/brave automatically if their API keys are set.")
+@click.option("--engines", default=_default_engines_csv, help="Comma-separated: crawl,sitemap,wayback,ddgs,google,serper,brave. Defaults to crawl,sitemap,wayback,ddgs plus google/serper/brave automatically if their API keys are set.")
 @click.option("--ddgs-backend", default="auto", show_default=True, help="Backend(s) for the 'ddgs' engine, e.g. duckduckgo, google, bing, brave, or 'auto' to fall back across several.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
@@ -221,7 +203,7 @@ def scan(
     all_targets = _collect_targets(targets, targets_file)
     manual_urls = _collect_urls(urls_file)
     if not all_targets:
-        all_targets = _hosts_of(manual_urls)
+        all_targets = hosts_of(manual_urls)
     if not all_targets:
         raise click.UsageError("Provide at least one TARGET, --targets-file, or --urls-file with valid URLs.")
 
@@ -526,7 +508,8 @@ def web(host: str, port: int, output_dir: str, open_browser: bool) -> None:
 @click.option("--port", default=8000, show_default=True)
 @click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path(), help="Where each job's report.json/report.html/downloads get saved.")
 @click.option("--max-workers", default=2, show_default=True, help="Maximum scans running at the same time; extra jobs queue and wait.")
-def api(host: str, port: int, output_dir: str, max_workers: int) -> None:
+@click.option("--max-pending", default=50, show_default=True, help="Maximum scans queued or running at once; POST /v1/scans returns 429 past this. Bounds memory use against an unauthenticated caller submitting jobs in a loop.")
+def api(host: str, port: int, output_dir: str, max_workers: int, max_pending: int) -> None:
     """Launch the MetaScout REST API — a separate, job-based HTTP service
     for programmatic/enterprise integration: POST a scan, poll its status,
     then pull the JSON/HTML report or a zip once it's done. Interactive
@@ -546,7 +529,7 @@ def api(host: str, port: int, output_dir: str, max_workers: int) -> None:
     _print_banner()
     console.print(f"[bold]MetaScout API[/bold] starting on [bold]http://{host}:{port}/[/bold]  (docs: http://{host}:{port}/docs)")
     console.print("[dim]No built-in authentication — see the README before exposing this beyond a trusted machine/network.[/dim]\n")
-    app = create_app(output_dir=output_dir, max_workers=max_workers)
+    app = create_app(output_dir=output_dir, max_workers=max_workers, max_pending=max_pending)
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
 

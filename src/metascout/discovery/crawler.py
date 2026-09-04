@@ -8,14 +8,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from ..models import DiscoveredDocument, DiscoverySource
+from ._common import normalize_start_url
 
 _HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
-
-
-def _normalize_start_url(target: str) -> str:
-    if target.startswith("http://") or target.startswith("https://"):
-        return target.rstrip("/")
-    return f"https://{target.rstrip('/')}"
 
 
 def _load_robots(start_url: str, session: requests.Session, timeout: int) -> urllib.robotparser.RobotFileParser:
@@ -48,7 +43,7 @@ def crawl_site(
     Stays within the starting domain and only follows HTML pages; any link whose
     extension matches ``filetypes`` is recorded without being fetched.
     """
-    start_url = _normalize_start_url(target)
+    start_url = normalize_start_url(target)
     start_netloc = urlparse(start_url).netloc
 
     session = requests.Session()

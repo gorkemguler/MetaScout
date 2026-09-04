@@ -4,44 +4,16 @@ import io
 import os
 import zipfile
 from contextlib import asynccontextmanager
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from .. import __version__
-from ..config import ScanConfig
+from ..config import ScanConfig, default_engines, hosts_of
 from ..models import ScanFindings
 from ..pipeline import run_local_document_scan, run_scan
-from .jobs import Job, JobStore
+from .jobs import Job, JobQueueFull, JobStore
 from .schemas import HealthResponse, JobCreated, JobLogResponse, JobStatusResponse, JobSummary, LocalScanRequest, ScanRequest
-
-
-def _default_engines() -> list[str]:
-    """Same auto-detection as the CLI's own _default_engines() (see cli.py):
-    crawl+sitemap+wayback+ddgs always, plus google/serper/brave once their
-    API key is already configured on this machine (env var/.env) — kept as
-    its own small copy here rather than importing cli.py, so the API service
-    doesn't pull in click (or any Flask-based web.py code) just to compute
-    a default list.
-    """
-    engines = ["crawl", "sitemap", "wayback", "ddgs"]
-    if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
-        engines.append("google")
-    if os.environ.get("SERPER_API_KEY"):
-        engines.append("serper")
-    if os.environ.get("BRAVE_API_KEY"):
-        engines.append("brave")
-    return engines
-
-
-def _hosts_of(urls: list[str]) -> list[str]:
-    hosts = []
-    for u in urls:
-        host = urlparse(u).netloc
-        if host:
-            hosts.append(host)
-    return sorted(set(hosts))
 
 
 def _summary_of(findings: ScanFindings) -> JobSummary:
@@ -96,7 +68,14 @@ def _require_done_job(store: JobStore, job_id: str) -> Job:
     return job
 
 
-def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) -> FastAPI:
+def _submit_or_429(store: JobStore, **kwargs) -> Job:
+    try:
+        return store.submit(**kwargs)
+    except JobQueueFull as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+
+def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2, max_pending: int = 50) -> FastAPI:
     """Builds the MetaScout REST API — a separate, job-based HTTP service
     wrapping the same discover -> download -> extract -> analyze pipeline as
     the CLI and the local web UI, for programmatic/enterprise integration
@@ -109,10 +88,12 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
     Tailscale/WireGuard-only network, an API gateway) before exposing it to
     anyone else. Unlike `metascout web`, every job here runs in a background
     thread pool (`max_workers`) so a request returns immediately instead of
-    blocking for the scan's full duration.
+    blocking for the scan's full duration; `max_pending` bounds how many jobs
+    can be queued/running at once (POST returns 429 past that), so an
+    unauthenticated caller can't grow the in-memory job registry without limit.
     """
     os.makedirs(output_dir, exist_ok=True)
-    store = JobStore(output_dir=output_dir, max_workers=max_workers)
+    store = JobStore(output_dir=output_dir, max_workers=max_workers, max_pending=max_pending)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -138,7 +119,7 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
 
     @app.post("/v1/scans", response_model=JobCreated, status_code=202, tags=["scans"])
     def create_scan(body: ScanRequest, request: Request) -> JobCreated:
-        targets = list(body.targets) or _hosts_of(body.manual_urls)
+        targets = list(body.targets) or hosts_of(body.manual_urls)
         if not targets:
             raise HTTPException(status_code=422, detail="Could not derive any target from 'manual_urls' — provide 'targets' explicitly.")
 
@@ -146,7 +127,7 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
             targets=targets,
             manual_urls=list(body.manual_urls),
             filetypes=[f.strip().lower().lstrip(".") for f in body.filetypes if f.strip()],
-            engines=[e.strip().lower() for e in body.engines] if body.engines is not None else _default_engines(),
+            engines=[e.strip().lower() for e in body.engines] if body.engines is not None else default_engines(),
             ddgs_backend=body.ddgs_backend,
             max_docs=body.max_docs,
             max_crawl_pages=body.max_crawl_pages,
@@ -176,7 +157,7 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
             cfg.output_dir = run_path
             return run_scan(cfg, log=log)
 
-        job = store.submit(kind="scan", targets=targets, report_lang=body.report_lang, work=work)
+        job = _submit_or_429(store, kind="scan", targets=targets, report_lang=body.report_lang, work=work)
         return JobCreated(job_id=job.job_id, status="queued", run_id=job.run_id, created_at=job.created_at, links=_job_links(request, job.job_id))
 
     @app.post("/v1/local-scans", response_model=JobCreated, status_code=202, tags=["scans"])
@@ -196,7 +177,7 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
                     critical_files=body.critical_files, critical_file_types=critical_ft, log=log,
                 )
         else:
-            targets = _hosts_of(body.urls)
+            targets = hosts_of(body.urls)
 
             def work(log, run_path):
                 cfg = ScanConfig(
@@ -207,7 +188,7 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2) 
                 )
                 return run_scan(cfg, log=log)
 
-        job = store.submit(kind="local-scan", targets=targets, report_lang=body.report_lang, work=work)
+        job = _submit_or_429(store, kind="local-scan", targets=targets, report_lang=body.report_lang, work=work)
         return JobCreated(job_id=job.job_id, status="queued", run_id=job.run_id, created_at=job.created_at, links=_job_links(request, job.job_id))
 
     @app.get("/v1/scans", response_model=list[JobStatusResponse], tags=["scans"])

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 DEFAULT_FILETYPES = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"]
 
@@ -63,3 +65,33 @@ class ScanConfig:
     # secrets/PII scan (same as any other document) once they're downloaded.
     critical_files: bool = False
     critical_file_types: list[str] = field(default_factory=lambda: list(DEFAULT_CRITICAL_FILETYPES))
+
+
+def default_engines() -> list[str]:
+    """crawl+sitemap+wayback+ddgs always (all free, no API key needed);
+    auto-adds google/serper/brave once their API key is already configured
+    on this machine (env var or .env) — shared by the CLI (`metascout scan`)
+    and the REST API (`metascout api`) so both stay in sync with a single
+    implementation instead of two copies that can silently drift apart.
+    """
+    engines = ["crawl", "sitemap", "wayback", "ddgs"]
+    if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
+        engines.append("google")
+    if os.environ.get("SERPER_API_KEY"):
+        engines.append("serper")
+    if os.environ.get("BRAVE_API_KEY"):
+        engines.append("brave")
+    return engines
+
+
+def hosts_of(urls: list[str]) -> list[str]:
+    """Derives sorted, deduplicated hostnames from a list of full URLs —
+    used to fill in `targets` automatically when only a manual URL list is
+    given. Shared by the CLI and the REST API.
+    """
+    hosts = []
+    for u in urls:
+        host = urlparse(u).netloc
+        if host:
+            hosts.append(host)
+    return sorted(set(hosts))

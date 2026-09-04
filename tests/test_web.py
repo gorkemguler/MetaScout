@@ -400,6 +400,40 @@ def test_history_escapes_target_values_to_prevent_xss(tmp_path):
     assert "&lt;script&gt;" in html
 
 
+def test_scan_form_error_reflection_escapes_targets_to_prevent_xss(tmp_path):
+    # Regression: on a validation error, the scan form re-renders with the
+    # submitted values echoed back into a <textarea> and several value="..."
+    # attributes via plain .format() (no autoescaping, unlike the Jinja
+    # report templates) — those values must be escaped, or a crafted
+    # targets/manual_urls/ddgs_backend/filetypes field breaks out of markup.
+    # Triggered here via an invalid --max-docs value, which is guaranteed to
+    # hit the error path regardless of what "targets" itself contains.
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    payload = "<script>alert(document.domain)</script>"
+    resp = client.post("/scan", data={
+        "targets": payload, "manual_urls": "", "engines": ["crawl"], "max_docs": "not-a-number",
+    })
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 400
+    assert payload not in body
+    assert "&lt;script&gt;" in body
+
+
+def test_local_scan_form_error_reflection_escapes_values_to_prevent_xss(tmp_path):
+    # Same bug, other form: "both sources given" is the most reliably
+    # triggerable error path (no numeric parsing involved) and reflects
+    # both local_dir and local_urls back unescaped before the fix.
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    payload = "<script>alert(document.domain)</script>"
+    resp = client.post("/local-scan", data={"local_dir": payload, "local_urls": payload})
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 400
+    assert payload not in body
+    assert "&lt;script&gt;" in body
+
+
 def test_history_skips_run_directories_without_report_json(tmp_path):
     import os
     app = create_app(output_dir=str(tmp_path))

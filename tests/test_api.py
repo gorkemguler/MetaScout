@@ -308,3 +308,33 @@ def test_summary_reflects_critical_files_and_content_findings(tmp_path):
 
     assert final["summary"]["critical_files"] == 1
     assert final["summary"]["content_findings"] == 1
+
+
+def test_job_queue_cap_returns_429_once_max_pending_reached(tmp_path):
+    # No built-in auth on this service — max_pending bounds how many jobs an
+    # unauthenticated caller can pile up in memory in a submit loop.
+    app = create_app(output_dir=str(tmp_path), max_workers=1, max_pending=2)
+    client = TestClient(app)
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_run_scan(cfg, log=None):
+        started.set()
+        release.wait(timeout=5)
+        return analyze([], targets=cfg.targets)
+
+    with patch("metascout.api.app.run_scan", side_effect=slow_run_scan):
+        r1 = client.post("/v1/scans", json={"targets": ["a.com"]})
+        started.wait(timeout=2)  # r1 now occupies the single worker (status=running)
+        r2 = client.post("/v1/scans", json={"targets": ["b.com"]})  # queued: pending count now 2
+        r3 = client.post("/v1/scans", json={"targets": ["c.com"]})  # pending already at the cap
+
+        assert r1.status_code == 202
+        assert r2.status_code == 202
+        assert r3.status_code == 429
+        assert "max-pending" in r3.json()["detail"] or "limit" in r3.json()["detail"]
+
+        release.set()
+        _wait_for_job(client, r1.json()["job_id"])
+        _wait_for_job(client, r2.json()["job_id"])

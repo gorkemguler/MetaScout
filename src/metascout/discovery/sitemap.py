@@ -6,14 +6,9 @@ from xml.etree import ElementTree
 import requests
 
 from ..models import DiscoveredDocument, DiscoverySource
+from ._common import normalize_start_url
 
 _NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-
-
-def _normalize_start_url(target: str) -> str:
-    if target.startswith("http://") or target.startswith("https://"):
-        return target.rstrip("/")
-    return f"https://{target.rstrip('/')}"
 
 
 def _fetch_xml(url: str, session: requests.Session, timeout: int) -> ElementTree.Element | None:
@@ -35,7 +30,7 @@ def sitemap_search(
     max_sitemaps: int = 20,
 ) -> list[DiscoveredDocument]:
     """Discover document links referenced in sitemap.xml (and nested sitemap indexes)."""
-    start_url = _normalize_start_url(target)
+    start_url = normalize_start_url(target)
     parsed = urlparse(start_url)
     filetype_set = {ft.lower().lstrip(".") for ft in filetypes}
 

@@ -14,6 +14,16 @@ from ..report import render_html_report, render_json_report
 JobKind = Literal["scan", "local-scan"]
 JobStatusName = Literal["queued", "running", "done", "error"]
 
+
+class JobQueueFull(RuntimeError):
+    """Raised by JobStore.submit() when max_pending jobs are already queued
+    or running. There's no built-in authentication on this service (see
+    api/app.py), so without this cap an unauthenticated caller could submit
+    an unbounded number of scan jobs in a loop and grow the in-memory job
+    registry (and the executor's own internal work queue) without limit —
+    this turns that into a clear, bounded 429 instead.
+    """
+
 # Work function signature: given a log callback (message: str) -> None and
 # the job's own run directory (assigned before the job starts running, so a
 # scan job can point its downloads/ subfolder at it), actually runs the scan
@@ -67,18 +77,25 @@ class JobStore:
 
     _LOG_LIMIT = 1000  # log lines kept per job before the oldest are dropped
 
-    def __init__(self, *, output_dir: str, max_workers: int = 2, max_jobs_kept: int = 200) -> None:
+    def __init__(self, *, output_dir: str, max_workers: int = 2, max_jobs_kept: int = 200, max_pending: int = 50) -> None:
         self.output_dir = output_dir
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="metascout-job")
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._max_jobs_kept = max_jobs_kept
+        self._max_pending = max_pending
 
     def submit(self, *, kind: JobKind, targets: list[str], report_lang: str, work: JobWork) -> Job:
-        job_id = uuid.uuid4().hex[:12]
-        run_id = f"api-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{job_id[:8]}"
-        job = Job(job_id=job_id, kind=kind, run_id=run_id, output_dir=self.output_dir, report_lang=report_lang, targets=targets)
         with self._lock:
+            pending = sum(1 for j in self._jobs.values() if j.status in ("queued", "running"))
+            if pending >= self._max_pending:
+                raise JobQueueFull(
+                    f"{pending} job(s) already queued or running (limit {self._max_pending}) — "
+                    "wait for some to finish, or raise --max-pending, before submitting more."
+                )
+            job_id = uuid.uuid4().hex[:12]
+            run_id = f"api-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{job_id[:8]}"
+            job = Job(job_id=job_id, kind=kind, run_id=run_id, output_dir=self.output_dir, report_lang=report_lang, targets=targets)
             self._jobs[job_id] = job
             self._evict_finished_past_cap_locked()
         self._executor.submit(self._run, job, work)
