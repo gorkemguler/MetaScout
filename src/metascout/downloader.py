@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
@@ -29,10 +30,25 @@ _MAGIC_PREFIX = {
 # one is searched for near the start instead of anchored to byte 0.
 _MAGIC_ANYWHERE = {"pdf": b"%PDF"}
 _HEAD_BYTES = 1024
+# A busy or rate-limiting host drops connections for a moment and then serves
+# the file fine, so a transient failure is worth one short retry before the
+# document is written off. Bounded and small: a scan fetches hundreds of
+# files, and a host that is genuinely down shouldn't stretch the whole run.
+_RETRY_SLEEPS = (1.0, 3.0)
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 class NotTheDocument(Exception):
     """200 OK, but the bytes aren't the document that was asked for."""
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Connection drops, timeouts and "try again later" status codes — as
+    opposed to a 404 or a bot-check page, where retrying changes nothing."""
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    response = getattr(exc, "response", None)
+    return response is not None and getattr(response, "status_code", None) in _RETRYABLE_STATUS
 
 
 def _describe_head(head: bytes) -> str:
@@ -113,6 +129,27 @@ def _fetch_to_file(
     return hasher.hexdigest(), size, None
 
 
+def _fetch_with_retries(
+    attempt_url: str,
+    local_path: str,
+    session: requests.Session,
+    timeout: int,
+    max_bytes: int,
+    filetype: str,
+) -> tuple[str, int, str | None]:
+    """_fetch_to_file, retrying transient failures with a short backoff.
+    Anything else (404, a bot-check page, a size skip) is raised straight
+    away — retrying it would just cost time."""
+    for delay in (*_RETRY_SLEEPS, None):
+        try:
+            return _fetch_to_file(attempt_url, local_path, session, timeout, max_bytes, filetype)
+        except (requests.RequestException, NotTheDocument) as exc:
+            if delay is None or not _is_transient(exc):
+                raise
+            time.sleep(delay)
+    raise AssertionError("unreachable: the last delay is None, which re-raises")
+
+
 def _download_one(
     doc: DiscoveredDocument,
     dest_dir: str,
@@ -131,12 +168,12 @@ def _download_one(
 
     for attempt_url in urls_to_try:
         try:
-            sha256, size, skip_error = _fetch_to_file(
+            sha256, size, skip_error = _fetch_with_retries(
                 attempt_url, local_path, session, timeout, max_bytes, doc.filetype,
             )
-        # NotTheDocument is retried like a failed fetch, which is exactly what
-        # makes the Wayback fallback useful here: the live site hands out a
-        # bot-check page, the archive still has the real document.
+        # NotTheDocument moves on to the next URL like a failed fetch, which is
+        # what makes the Wayback fallback useful here: the live site hands out
+        # a bot-check page, the archive still has the real document.
         except (requests.RequestException, NotTheDocument) as exc:
             last_error = str(exc)
             continue

@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import requests
 
@@ -174,3 +175,65 @@ def test_download_one_accepts_a_pdf_with_junk_before_the_header(tmp_path):
     result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
 
     assert result.error is None
+
+
+def test_download_one_retries_a_dropped_connection(tmp_path):
+    """A host that drops a connection for a moment (30 of these in one real
+    scan) shouldn't cost the document."""
+    doc = DiscoveredDocument(url="https://example.com/a.pdf", source=DiscoverySource.CRAWL, filetype="pdf")
+    session = MagicMock()
+    session.get.side_effect = [
+        requests.exceptions.ConnectionError("Connection refused"),
+        _FakeResp(b"%PDF-1.7 ok"),
+    ]
+
+    with patch("metascout.downloader.time.sleep") as sleep:
+        result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    assert result.error is None
+    assert session.get.call_count == 2
+    assert sleep.call_args.args[0] == 1.0
+
+
+def test_download_one_gives_up_after_the_retries(tmp_path):
+    doc = DiscoveredDocument(url="https://example.com/a.pdf", source=DiscoverySource.CRAWL, filetype="pdf")
+    session = MagicMock()
+    session.get.side_effect = requests.exceptions.ConnectionError("Connection refused")
+
+    with patch("metascout.downloader.time.sleep") as sleep:
+        result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    assert "Connection refused" in result.error
+    assert session.get.call_count == 3  # first try + two retries
+    assert [c.args[0] for c in sleep.call_args_list] == [1.0, 3.0]
+
+
+def test_download_one_does_not_retry_a_404_or_a_bot_check_page(tmp_path):
+    for payload in [requests.exceptions.HTTPError("404 Not Found"), _FakeResp(b"<html>bot check</html>")]:
+        doc = DiscoveredDocument(url="https://example.com/a.pdf", source=DiscoverySource.CRAWL, filetype="pdf")
+        session = MagicMock()
+        session.get.side_effect = [payload]
+
+        with patch("metascout.downloader.time.sleep") as sleep:
+            result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+        assert result.error is not None
+        assert session.get.call_count == 1
+        sleep.assert_not_called()
+
+
+def test_download_one_retries_a_503_then_falls_back_to_the_archive(tmp_path):
+    snapshot = "https://web.archive.org/web/20200101000000id_/https://example.com/a.pdf"
+    doc = DiscoveredDocument(url="https://example.com/a.pdf", source=DiscoverySource.WAYBACK,
+                             filetype="pdf", archive_url=snapshot)
+    unavailable = requests.exceptions.HTTPError("503 Service Unavailable")
+    unavailable.response = SimpleNamespace(status_code=503)
+    session = MagicMock()
+    session.get.side_effect = [unavailable, unavailable, unavailable, _FakeResp(b"%PDF-1.7 archived")]
+
+    with patch("metascout.downloader.time.sleep"):
+        result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    assert result.error is None
+    assert result.archive_url == snapshot
+    assert session.get.call_count == 4  # 3 on the live URL, then the archive

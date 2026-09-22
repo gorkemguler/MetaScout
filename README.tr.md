@@ -109,7 +109,10 @@ bilgisiyle.
 - **Pasif subdomain keşfi**: [crt.sh](https://crt.sh) (Certificate Transparency
   logları) üzerinden API anahtarı gerektirmeden subdomain bulur, her birini de tarar
 - **`robots.txt`'e saygılı** varsayılan davranış, dürüst bir User-Agent gönderir
-- **Eşzamanlı indirme**, boyut sınırı ve sha256 ile tekilleştirme
+- **Eşzamanlı indirme**, boyut sınırı ve sha256 ile tekilleştirme; sunucu
+  bağlantıyı düşürdüğünde ya da 429/5xx döndüğünde kısa bir yeniden deneme ve
+  gelenin gerçekten belge olup olmadığının (bot kontrol sayfası / yumuşak 404
+  değil) doğrulanması
 - **Detaylı HTML rapor** (koyu tema, kategori bazlı bulgu tabloları, İngilizce
   veya Türkçe) + otomasyon için **JSON rapor**
 - **İsteğe bağlı belge *içerik* taraması** kişisel/kritik veri için — TC kimlik

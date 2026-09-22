@@ -106,7 +106,9 @@ inside DOCX/XLSX/PPTX/ODF files, each with its own EXIF/XMP.
 - **Passive subdomain enumeration** via [crt.sh](https://crt.sh) (Certificate
   Transparency logs), no API key required, each subdomain gets scanned too
 - **Respects `robots.txt` by default** and sends an honest, non-spoofed User-Agent
-- **Concurrent downloads** with a size cap and sha256 deduplication
+- **Concurrent downloads** with a size cap and sha256 deduplication, a short
+  retry when a host drops the connection or answers 429/5xx, and a check that
+  what came back is actually the document (not a bot-check page or soft 404)
 - **Detailed HTML report** (dark theme, findings grouped by category, English
   or Turkish) plus a **JSON report** for automation
 - **Opt-in document *content* scan** for personal/critical data — national ID
