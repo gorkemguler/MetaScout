@@ -527,3 +527,42 @@ def test_diff_view_escapes_run_id_in_heading(tmp_path):
     assert resp.status_code == 200
     assert evil_id not in resp.data.decode()
     assert "&lt;img" in resp.data.decode()
+
+
+def test_history_row_stays_narrow_enough_to_render(tmp_path):
+    """The run list used to print a raw ISO timestamp and a full filesystem
+    path, which burst the table out of the page."""
+    long_path = "/private/tmp/claude-501/-Users-someone-Documents-Proje/scratchpad/local_scan_test"
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "local-20260101-100000", targets=[long_path],
+               scanned_at="2026-01-01T10:00:00.123456+00:00")
+
+    html = client.get("/history").data.decode()
+
+    assert "2026-01-01 10:00" in html
+    assert "2026-01-01T10:00:00.123456" not in html
+    # truncated in the cell, kept in full in the title attribute
+    assert "…</td>" in html
+    assert f'title="{long_path}"' in html
+    # the tables are styled on this page, not just in the report templates
+    assert "table.runs td.value" in html
+    assert 'main class="wide"' in html
+
+
+def test_history_row_offers_report_zip_and_pdf(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    _write_run(str(tmp_path), "web-20260101-100000", targets=["a.example.com"])
+
+    html = client.get("/history?lang=tr").data.decode()
+
+    assert '/history/web-20260101-100000' in html
+    assert '/download/web-20260101-100000' in html
+    assert '/report-pdf/web-20260101-100000?lang=tr' in html
+
+
+def test_scan_form_page_keeps_the_narrow_column(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    html = app.test_client().get("/").data.decode()
+    assert 'main class=""' in html

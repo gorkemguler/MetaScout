@@ -78,6 +78,31 @@ def test_wayback_search_accepts_full_url_target():
         docs = wayback_search("https://example.com/some/path", ["pdf"])
 
     assert [d.url for d in docs] == ["https://example.com/file.pdf"]
-    called_params = mock_get.call_args.kwargs["params"]
+    called_params = mock_get.call_args_list[0].kwargs["params"]
     assert called_params["url"] == "example.com"
     assert called_params["matchType"] == "host"
+
+
+def test_wayback_search_also_asks_for_the_www_host():
+    """The archive keys on the host that served the file: a site's older
+    documents are often only under www., and were being missed whenever
+    subdomain enumeration didn't happen to turn that host up."""
+    apex = [["timestamp", "original"], ["20200101000000", "http://example.com/a.pdf"]]
+    www = [["timestamp", "original"],
+           ["20120101000000", "http://www.example.com/old.pdf"],
+           ["20200101000000", "http://example.com/a.pdf"]]  # same file, already seen
+
+    with patch("requests.Session.get", side_effect=[_fake_response(apex), _fake_response(www)]) as mock_get:
+        docs = wayback_search("example.com", ["pdf"])
+
+    assert [c.kwargs["params"]["url"] for c in mock_get.call_args_list] == ["example.com", "www.example.com"]
+    assert sorted(d.url for d in docs) == ["http://example.com/a.pdf", "http://www.example.com/old.pdf"]
+
+
+def test_wayback_search_asks_for_the_apex_when_given_a_www_host():
+    empty = [["timestamp", "original"]]
+
+    with patch("requests.Session.get", side_effect=[_fake_response(empty), _fake_response(empty)]) as mock_get:
+        wayback_search("www.example.com", ["pdf"])
+
+    assert [c.kwargs["params"]["url"] for c in mock_get.call_args_list] == ["www.example.com", "example.com"]

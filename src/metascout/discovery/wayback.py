@@ -15,6 +15,16 @@ def _ext_of(url: str) -> str:
     return path.rsplit(".", 1)[-1].lower() if "." in path else ""
 
 
+def _host_variants(host: str) -> list[str]:
+    """The archive stores documents under whichever host served them at the
+    time, so "example.com" and "www.example.com" hold different sets of files
+    even when the live site treats them as one. Asking for both is one extra
+    CDX query, against missing every document archived under the other name."""
+    if host.startswith("www."):
+        return [host, host[4:]]
+    return [host, f"www.{host}"]
+
+
 def wayback_search(
     target: str,
     filetypes: list[str],
@@ -29,8 +39,11 @@ def wayback_search(
 
     Queries the CDX Server API (https://web.archive.org/cdx/search/cdx) with
     a server-side regex filter on file extension to keep the response small.
-    Scoped to exactly this host; subdomains are not included automatically
-    (scan them separately via --subdomains, same as the other engines).
+    Scoped to this host and its www./apex counterpart (the archive keys on
+    the host that served the file, so the same site's old documents are often
+    only under one of the two); other subdomains are not included
+    automatically — scan them separately via --subdomains, same as the other
+    engines.
 
     Each result's `url` is the original live-site URL — the same one crawl,
     sitemap, or any dork engine would report for the same file — so a
@@ -53,6 +66,21 @@ def wayback_search(
     session = requests.Session()
     session.headers["User-Agent"] = user_agent
 
+    found: dict[str, DiscoveredDocument] = {}
+    for variant in _host_variants(host):
+        found.update(_query_host(variant, session, ext_pattern, filetype_set, timeout, max_results, skip=found))
+    return list(found.values())
+
+
+def _query_host(
+    host: str,
+    session: requests.Session,
+    ext_pattern: str,
+    filetype_set: set[str],
+    timeout: int,
+    max_results: int,
+    skip: dict[str, DiscoveredDocument],
+) -> dict[str, DiscoveredDocument]:
     params = {
         "url": host,
         "matchType": "host",
@@ -66,15 +94,15 @@ def wayback_search(
     try:
         resp = session.get(_CDX_ENDPOINT, params=params, timeout=timeout)
     except requests.RequestException:
-        return []
+        return {}
     if resp.status_code != 200 or not resp.text.strip():
-        return []
+        return {}
     try:
         rows = resp.json()
     except ValueError:
-        return []
+        return {}
     if not rows or len(rows) <= 1:
-        return []
+        return {}
 
     found: dict[str, DiscoveredDocument] = {}
     for row in rows[1:]:
@@ -84,8 +112,8 @@ def wayback_search(
         ext = _ext_of(url)
         if ext not in filetype_set:
             continue
-        if url not in found:
+        if url not in found and url not in skip:
             archive_url = f"https://web.archive.org/web/{timestamp}id_/{url}"
             found[url] = DiscoveredDocument(url=url, source=DiscoverySource.WAYBACK, filetype=ext, archive_url=archive_url)
 
-    return list(found.values())
+    return found

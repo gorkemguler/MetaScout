@@ -364,7 +364,24 @@ _PAGE_HEAD = """<!DOCTYPE html>
   .page-nav a.active {{ color: var(--accent); border-bottom-color: var(--accent); }}
   .page-nav a:hover:not(.active) {{ color: var(--text); }}
   main {{ padding: 24px 40px 60px; max-width: 760px; margin: 0 auto; }}
+  main.wide {{ max-width: 1080px; }}
   .card {{ background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }}
+  .table-scroll {{ overflow-x: auto; margin-top: 14px; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+  th {{ text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }}
+  td {{ padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }}
+  tbody tr:last-child td {{ border-bottom: none; }}
+  tbody tr:hover {{ background: rgba(110,168,254,0.05); }}
+  td.value {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-word; }}
+  td.count {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  td.doclist, td.when {{ color: var(--muted); white-space: nowrap; }}
+  td.actions {{ white-space: nowrap; }}
+  /* The run list has six columns in a narrow page: keep every cell on one
+     line and cut it with an ellipsis (the full value stays in the title). */
+  table.runs td.value {{ white-space: nowrap; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }}
+  td.actions a {{ color: var(--accent); text-decoration: none; }}
+  td.actions a:hover {{ text-decoration: underline; }}
   label {{ display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; margin-top: 16px; }}
   label:first-of-type {{ margin-top: 0; }}
   textarea, input[type=text], input[type=number] {{
@@ -443,7 +460,7 @@ function metascoutStartScan() {{
     <a href="{base_path}?lang=tr" class="{tr_active}">TR</a>
   </div>
 </header>
-<main>
+<main class="{main_class}">
 """
 
 _PAGE_TAIL = """
@@ -541,9 +558,11 @@ _FORM_BODY = """
 def _render_page_head(ui_lang: str, current_page: str) -> str:
     """current_page is "scan", "local", or "history" — drives both which
     nav link is highlighted and which page the EN/TR language switcher
-    stays on."""
+    stays on, plus how wide the content column is (the history/diff tables
+    need more room than the forms)."""
     base_path = {"local": "/local-scan", "history": "/history"}.get(current_page, "/")
     return _PAGE_HEAD.format(
+        main_class="wide" if current_page == "history" else "",
         ui_lang=ui_lang,
         tagline=_t(ui_lang, "tagline"),
         base_path=base_path,
@@ -805,6 +824,21 @@ def _list_scan_history(output_dir: str, *, limit: int = 100) -> list[dict]:
     return entries
 
 
+def _format_scanned_at(value: str) -> str:
+    """"2026-09-22T18:57:13.679395+00:00" reads as a wall of digits in a table
+    column; show the minute it finished instead, raw value if unparseable."""
+    try:
+        return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return value or "-"
+
+
+def _shorten(value: str, limit: int) -> str:
+    """Local-scan "targets" are full filesystem paths, long enough on their
+    own to blow the table out of the page; the full value stays in a title."""
+    return value if len(value) <= limit else value[: limit - 1] + "…"
+
+
 def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output", error: str | None = None) -> str:
     if ui_lang not in _STRINGS:
         ui_lang = "en"
@@ -823,23 +857,24 @@ def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output",
             run_id = html.escape(run["run_id"])
             type_label = html.escape(_t(ui_lang, "history_type_local" if run["kind"] == "local" else "history_type_scan"))
             targets_raw = ", ".join(run["targets"][:3]) + (" …" if len(run["targets"]) > 3 else "")
-            targets = html.escape(targets_raw)
+            targets = html.escape(_shorten(targets_raw, 42))
+            targets_title = html.escape(targets_raw)
             documents = html.escape(str(run["documents"]))
-            scanned_at = html.escape(run["scanned_at"])
+            scanned_at = html.escape(_format_scanned_at(run["scanned_at"]))
             rows.append(
                 "<tr>"
                 f'<td class="value">{run_id}</td>'
                 f"<td>{type_label}</td>"
-                f'<td class="value">{targets}</td>'
+                f'<td class="value" title="{targets_title}">{targets}</td>'
                 f'<td class="count">{documents}</td>'
-                f'<td class="doclist">{scanned_at}</td>'
-                f'<td><a href="/history/{run_id}">{html.escape(_t(ui_lang, "history_view_label"))}</a>'
+                f'<td class="when">{scanned_at}</td>'
+                f'<td class="actions"><a href="/history/{run_id}">{html.escape(_t(ui_lang, "history_view_label"))}</a>'
                 f' &middot; <a href="/download/{run_id}" download>{html.escape(_t(ui_lang, "history_download_label"))}</a>'
                 f' &middot; <a href="/report-pdf/{run_id}?lang={ui_lang}">{html.escape(_t(ui_lang, "history_pdf_label"))}</a></td>'
                 "</tr>"
             )
         table = (
-            '<div class="table-scroll"><table><thead><tr>'
+            '<div class="table-scroll"><table class="runs"><thead><tr>'
             f'<th>{_t(ui_lang, "history_col_run")}</th><th>{_t(ui_lang, "history_col_type")}</th>'
             f'<th>{_t(ui_lang, "history_col_targets")}</th><th>{_t(ui_lang, "history_col_docs")}</th>'
             f'<th>{_t(ui_lang, "history_col_scanned")}</th><th>{_t(ui_lang, "history_col_actions")}</th>'
