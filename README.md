@@ -636,7 +636,13 @@ crawl, sitemap, or a dork engine would report for the same file — so a
 document found by more than one engine still shows up once in the report,
 not twice. Since that original URL is often exactly what's gone, MetaScout
 also keeps the actual archive.org snapshot address behind the scenes and
-downloads from there automatically if fetching the original URL fails.
+downloads from there automatically if fetching the original URL fails — or
+answers with something that isn't the document at all. A site that serves a
+cookie/bot-check page, a login form or a soft 404 under a `.pdf` URL still
+returns HTTP 200, so every download is checked against the file type's
+signature (`%PDF`, the ZIP header for Office/ODF, OLE2 for legacy `.doc`)
+before it counts. Those responses are never stored or analyzed, and they're
+exactly the case where the archive still has the real file.
 
 When that fallback is what actually delivered the file, the report says so:
 the document is tagged **archive** in the Documents table (the tag links to

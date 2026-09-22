@@ -651,7 +651,12 @@ birebir aynı — böylece birden fazla motorun bulduğu bir belge raporda iki
 kez değil, tek seferde görünür. Orijinal URL genelde tam olarak "artık
 olmayan" şey olduğu için, MetaScout arka planda gerçek archive.org
 anlık görüntü adresini de tutar ve orijinal URL'den indirme başarısız
-olursa otomatik olarak oradan indirir.
+olursa — ya da belge yerine başka bir şey dönerse — otomatik olarak oradan
+indirir. Bir site `.pdf` adresine çerez/bot kontrol sayfası, giriş formu ya
+da "yumuşak 404" döndürdüğünde de HTTP 200 gelir; bu yüzden her indirme,
+dosya türünün imzasına (`%PDF`, Office/ODF için ZIP başlığı, eski `.doc`
+için OLE2) karşı doğrulanır. Bu tür yanıtlar ne kaydedilir ne de analiz
+edilir; zaten gerçek dosyanın arşivde durduğu durum tam olarak budur.
 
 Dosya gerçekten bu yoldan geldiyse rapor bunu belirtir: belge, Belgeler
 tablosunda **arşiv** rozetiyle işaretlenir (rozet, geldiği anlık görüntüye
