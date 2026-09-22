@@ -84,6 +84,11 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **GPS coordinates**, when a photo with location EXIF data (e.g. a phone
   photo pasted into a Word doc) is embedded in a document — a link to view
   it on a map is included in the report
+- **Classification / sensitivity labels** the authoring tool wrote into the
+  file: Microsoft Purview (AIP) `MSIP_Label_*` properties, TITUS markings, or
+  a plain `Classification` document property. A label that says "Confidential",
+  "Internal", "NATO RESTRICTED", "Hizmete Özel" and so on, on a document that
+  is nonetheless published, is flagged as high risk on its own
 
 Embedded content is read too, not just the file's own metadata: the images
 and Illustrator data placed inside a PDF (exiftool `-ee`), and the pictures

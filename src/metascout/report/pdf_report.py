@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from datetime import datetime
 
 try:
@@ -41,8 +42,17 @@ _BAD = "#c0392b"
 _WARN = "#b26a12"
 _GOOD = "#1f8a4c"
 
-_CATEGORIES = ["usernames", "emails", "software", "operating_systems", "internal_paths", "servers_and_printers", "geolocation"]
+_CATEGORIES = ["usernames", "emails", "software", "operating_systems", "internal_paths",
+               "servers_and_printers", "geolocation", "classification_labels"]
 _CRITICAL_CONTENT = {"tc_kimlik", "iban", "credit_card"}
+# Kept in step with the analyzer's own RESTRICTED_LABEL_RE, but re-declared
+# here so a PDF can be built from a report.json without importing the
+# analyzer's scanning machinery.
+_RESTRICTED_LABEL_RE = re.compile(
+    r"confidential|restricted|secret|internal|private|classified|nato\s|"
+    r"gizli|özel|hizmete|kişiye|tasnifli",
+    re.IGNORECASE,
+)
 # Tables of every document/error get long; keep the PDF a report, not a dump.
 _MAX_ROWS = 400
 
@@ -55,10 +65,13 @@ _STRINGS = {
         "summary": "Summary",
         "stat_documents": "Documents found", "stat_with_metadata": "With metadata",
         "stat_findings": "Unique findings", "stat_archive": "From archive",
-        "per_target": "Documents per target", "col_target": "Target", "col_documents": "Documents",
+        "per_target": "Documents per target", "col_target": "Target", "col_documents": "Documents read",
         "usernames": "Usernames", "emails": "Email Addresses", "software": "Software & Versions",
         "operating_systems": "Operating Systems", "internal_paths": "Internal File Paths",
         "servers_and_printers": "Servers & Printers", "geolocation": "Geolocation (GPS)",
+        "classification_labels": "Classification Labels",
+        "restricted_note": "Some of these documents carry a label saying they are not meant to be public. "
+                           "The label is in the document's own metadata; the document itself is published.",
         "col_value": "Value", "col_field": "Metadata field", "col_docs": "Docs", "col_seen": "First seen in",
         "content_scan": "Content Scan (personal/critical data)",
         "col_category": "Category", "col_masked": "Value (masked)", "col_document": "Document",
@@ -86,10 +99,13 @@ _STRINGS = {
         "summary": "Özet",
         "stat_documents": "Belge bulundu", "stat_with_metadata": "Metadata içeren",
         "stat_findings": "Benzersiz bulgu", "stat_archive": "Arşivden gelen",
-        "per_target": "Hedef başına belge", "col_target": "Hedef", "col_documents": "Belge",
+        "per_target": "Hedef başına belge", "col_target": "Hedef", "col_documents": "Metadata okunan",
         "usernames": "Kullanıcı Adları", "emails": "E-posta Adresleri", "software": "Yazılım & Sürümler",
         "operating_systems": "İşletim Sistemleri", "internal_paths": "İç Dosya Yolları",
         "servers_and_printers": "Sunucular & Yazıcılar", "geolocation": "Konum (GPS)",
+        "classification_labels": "Gizlilik Etiketleri",
+        "restricted_note": "Bu belgelerin bir kısmı, herkese açık olmaması gerektiğini söyleyen bir gizlilik "
+                           "etiketi taşıyor. Etiket belgenin metadata'sında duruyor; belgenin kendisi yayında.",
         "col_value": "Değer", "col_field": "Metadata alanı", "col_docs": "Belge", "col_seen": "İlk görüldüğü belge",
         "content_scan": "İçerik Taraması (kişisel/kritik veri)",
         "col_category": "Kategori", "col_masked": "Değer (maskeli)", "col_document": "Belge",
@@ -151,13 +167,18 @@ def _risk(payload: dict, t: dict) -> tuple[str, str]:
 
     if total == 0 and not content and not critical_files:
         return t["risk_none"], _MUTED
-    if critical_content or counts["geolocation"]:
+    if critical_content or counts["geolocation"] or _restricted_labels(payload):
         return t["risk_high"], _BAD
     if sensitive == 0 and not content:
         return t["risk_low"], _ACCENT
     if sensitive <= 10:
         return t["risk_medium"], _WARN
     return t["risk_high"], _BAD
+
+
+def _restricted_labels(payload: dict) -> list[str]:
+    labels = (payload.get("findings") or {}).get("classification_labels") or {}
+    return [v for v in labels if _RESTRICTED_LABEL_RE.search(v)]
 
 
 def _fmt_date(value: str) -> str:
@@ -228,6 +249,10 @@ def _findings_section(payload: dict, category: str, t: dict, st: dict, width: fl
     if not bucket:
         story.append(Paragraph(t["empty"], st["muted"]))
         return story
+
+    if category == "classification_labels" and _restricted_labels(payload):
+        story.append(Paragraph(f"<font color='{_BAD}'>{t['restricted_note']}</font>", st["body"]))
+        story.append(Spacer(1, 4))
 
     rows = [[t["col_value"], t["col_field"], t["col_docs"], t["col_seen"]]]
     for value, meta in list(bucket.items())[:_MAX_ROWS]:

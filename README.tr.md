@@ -85,6 +85,12 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **GPS koordinatları**, konum bilgisi içeren bir fotoğraf (ör. bir
   belgeye yapıştırılmış telefon fotoğrafı) belgeye gömülüyse — raporda
   haritada görüntüleme linki de sunulur
+- **Gizlilik / sınıflandırma etiketleri**: belgeyi üreten programın dosyaya
+  yazdığı damgalar — Microsoft Purview (AIP) `MSIP_Label_*` özellikleri,
+  TITUS işaretleri ya da düpedüz bir `Classification` belge özelliği.
+  "Confidential", "Internal", "NATO RESTRICTED", "Hizmete Özel" gibi bir
+  etiket taşıyan belge buna rağmen yayındaysa, bu tek başına yüksek risk
+  olarak işaretlenir
 
 Yalnızca dosyanın kendi metadata'sı değil, gömülü içerik de okunur: PDF'e
 yerleştirilmiş görseller ve Illustrator verisi (exiftool `-ee`) ile

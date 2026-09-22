@@ -153,13 +153,14 @@
     <div class="meta-row">
       <span class="meta-item">Target{{ "s" if findings.targets | length > 1 else "" }}: <strong>{{ findings.targets | join(", ") }}</strong></span>
       <span class="meta-item">Scanned: <strong>{{ findings.scanned_at.strftime("%Y-%m-%d %H:%M") }} UTC</strong></span>
-      <span class="meta-item">Documents scanned: <strong>{{ findings.documents | length }}</strong></span>
-      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length %}
+      <span class="meta-item">Documents discovered: <strong>{{ findings.documents | length }}</strong></span>
+      <span class="meta-item">Metadata read from: <strong>{{ findings.documents_with_metadata }}</strong></span>
+      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length + findings.classification_labels|length %}
       {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.critical_files|length %}
       {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
       {% if total_findings == 0 and not findings.content_findings and not findings.critical_files %}
         <span class="badge badge-none">No Findings</span>
-      {% elif critical_content_hits > 0 or findings.geolocation %}
+      {% elif critical_content_hits > 0 or findings.geolocation or findings.restricted_classification_labels %}
         <span class="badge badge-high">High Risk</span>
       {% elif sensitive_hits == 0 and not findings.content_findings %}
         <span class="badge badge-low">Low Risk</span>
@@ -196,6 +197,11 @@
           site: the copy came from the <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback
           Machine</a> archive instead, and is marked <span class="archive-badge">archive</span> in the
           list below. Removed from the site, these are still public through the archive.
+        {% endif %}
+        {% if findings.restricted_classification_labels %}
+          Some documents carry a <strong>classification label saying they are not meant to be public</strong>
+          ({{ findings.restricted_classification_labels | join(", ") | truncate(120) }}) — see
+          <a href="#classification">Classification Labels</a> below.
         {% endif %}
         {% if findings.geolocation %}
           <strong>{{ findings.geolocation | length }} GPS location(s)</strong> were also
@@ -248,7 +254,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Target</th><th>Documents found</th></tr></thead>
+        <thead><tr><th>Target</th><th>Documents read</th></tr></thead>
         <tbody>
         {% for t, count in findings.documents_by_target.items() %}
           <tr><td class="value">{{ t }}</td><td class="count">{{ count }}</td></tr>
@@ -332,6 +338,18 @@
       {{ finding_table(findings.servers_and_printers, "Server / printer") }}
     </section>
     {% if findings.geolocation %}
+    <section id="classification">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg></div>
+        <h2>Classification Labels</h2>
+        <span class="n">{{ findings.classification_labels | length }}</span>
+      </div>
+      {% if findings.restricted_classification_labels %}
+      <p class="empty" style="color:var(--bad)">Some of these documents carry a label saying they are not
+      meant to be public. The label is in the document's own metadata; the document itself is published.</p>
+      {% endif %}
+      {{ finding_table(findings.classification_labels, "Label") }}
+    </section>
     <section id="geolocation">
       <div class="section-head">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg></div>

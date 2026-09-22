@@ -40,6 +40,7 @@ def render_json_report(findings: ScanFindings) -> str:
             "internal_paths": _findings_dict(findings.internal_paths),
             "servers_and_printers": _findings_dict(findings.servers_and_printers),
             "geolocation": _findings_dict(findings.geolocation),
+            "classification_labels": _findings_dict(findings.classification_labels),
         },
         "content_findings": [
             {

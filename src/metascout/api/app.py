@@ -23,6 +23,7 @@ def _summary_of(findings: ScanFindings) -> JobSummary:
         len(findings.usernames) + len(findings.emails) + len(findings.software)
         + len(findings.operating_systems) + len(findings.internal_paths)
         + len(findings.servers_and_printers) + len(findings.geolocation)
+        + len(findings.classification_labels)
     )
     return JobSummary(
         documents_discovered=len(findings.documents),

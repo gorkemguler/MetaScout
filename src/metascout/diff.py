@@ -8,7 +8,7 @@ from __future__ import annotations
 # being silently ignored.
 FINDING_CATEGORIES = [
     "usernames", "emails", "software", "operating_systems",
-    "internal_paths", "servers_and_printers", "geolocation",
+    "internal_paths", "servers_and_printers", "geolocation", "classification_labels",
 ]
 
 

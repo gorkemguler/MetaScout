@@ -154,3 +154,18 @@ def test_cli_pdf_command_explains_a_missing_extra(tmp_path):
     assert result.exit_code == 1
     assert "metascout[pdf]" in result.output
     assert not (run_dir / "report.pdf").exists()
+
+
+def test_pdf_report_shows_classification_labels():
+    payload = _payload()
+    payload["findings"]["classification_labels"] = {
+        "Classification: NATO RESTRICTED": {"document_urls": ["https://example.com/live.pdf"], "field_name": "Metadata"},
+    }
+    payload["content_findings"] = []  # so the risk comes from the label alone
+
+    text = _text(render_pdf_report(payload, lang="en"))
+
+    assert "Classification Labels" in text
+    assert "NATO RESTRICTED" in text
+    assert "not meant to be public" in text
+    assert "High Risk" in text

@@ -55,6 +55,22 @@ SOFTWARE_FIELDS = {
     "producer", "creatortool", "software", "application", "programname", "generator", "xcreatortool",
     "historysoftwareagent",
 }
+# Fields holding a data-classification / sensitivity marking. Microsoft
+# Purview (AIP) writes "MSIP_Label_<guid>_Name" custom properties, TITUS
+# writes an XMP blob (see TITUS_PAIR_RE), and plenty of organizations just
+# add a "Classification" document property of their own.
+CLASSIFICATION_FIELDS = {
+    "classification", "securityclassification", "dataclassification", "docclassification",
+    "sensitivity", "sensitivitylabel", "confidentiality", "gizlilik", "gizlilikderecesi",
+}
+TITUS_GROUP = "XMP-tmi"
+TITUS_PAIR_RE = re.compile(r"([A-Za-z][A-Za-z0-9_]*)(?:\[\d+\])?='([^']*)'")
+# Labels that say a document was not meant to be public (TR + EN + NATO).
+RESTRICTED_LABEL_RE = re.compile(
+    r"confidential|restricted|secret|internal|private|classified|nato\s|"
+    r"gizli|özel|hizmete|kişiye|tasnifli",
+    re.IGNORECASE,
+)
 PRINTER_HINT = "printer"
 # exiftool's own composite tag combines lat+lon+direction into one clean
 # string (e.g. "41.015137 N, 28.979530 E", given -c "%.6f" in the wrapper)
@@ -127,6 +143,14 @@ def _field_kind(group: str, tag_name_clean: str) -> str | None:
         return "username"
     if tag_name_clean in SOFTWARE_FIELDS:
         return "software"
+    if group == TITUS_GROUP:
+        return "classification_blob"
+    # "MSIP_Label_<guid>_Name" carries the human-readable label; the sibling
+    # _SiteId/_Enabled/_SetDate properties are bookkeeping.
+    if tag_name_clean in CLASSIFICATION_FIELDS or (
+        tag_name_clean.startswith("msip_label") and tag_name_clean.endswith("_name")
+    ):
+        return "classification"
     return None
 
 
@@ -173,6 +197,16 @@ def _scan_value(
 
     if tag_name_clean == GPS_POSITION_FIELD:
         _add(findings.geolocation, value.strip(), doc_url, tag_name)
+
+    if kind == "classification" and value.strip().lower() not in GENERIC_VALUES:
+        _add(findings.classification_labels, value.strip(), doc_url, tag_name)
+
+    # A TITUS blob packs several markings into one value:
+    # "... Ownership[0]='None (Public)' Classification='NATO RESTRICTED' ..."
+    if kind == "classification_blob" or "titus.com/ns" in value:
+        for key, label in TITUS_PAIR_RE.findall(value):
+            if label.strip():
+                _add(findings.classification_labels, f"{key}: {label.strip()}", doc_url, tag_name)
 
 
 def analyze(documents: list[DocumentMetadata], targets: list[str]) -> ScanFindings:

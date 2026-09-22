@@ -229,3 +229,49 @@ def test_analyze_internal_hosts_in_metadata_urls():
     findings = analyze([doc], targets=["example.com"])
 
     assert set(findings.servers_and_printers) == {"intranet.acme.local", "10.20.30.40"}
+
+
+def test_analyze_extracts_classification_labels():
+    doc = DocumentMetadata(
+        url="https://example.gov/plan.docx", local_path="/tmp/a.docx", filetype="docx",
+        raw={
+            # Microsoft Purview / AIP writes the label plus bookkeeping siblings
+            "XML:MSIP_Label_1111_Name": "Confidential - Internal",
+            "XML:MSIP_Label_1111_SiteId": "2222-aaaa-bbbb",
+            "XML:MSIP_Label_1111_Enabled": "true",
+            "XML:Classification": "Hizmete Özel",
+        },
+    )
+
+    findings = analyze([doc], targets=["example.gov"])
+
+    assert set(findings.classification_labels) == {"Confidential - Internal", "Hizmete Özel"}
+    assert findings.classification_labels["Confidential - Internal"].field_name == "MSIP_Label_1111_Name"
+    assert sorted(findings.restricted_classification_labels) == ["Confidential - Internal", "Hizmete Özel"]
+
+
+def test_analyze_parses_titus_label_blob():
+    doc = DocumentMetadata(
+        url="https://example.gov/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={"XMP-tmi:Metadata": "@NAMESPACE=http://www.titus.com/ns/nato @TRACKINGID=f2c66ddb-1c7d "
+                                 "Ownership[0]='None (Public)' Classification='NATO RESTRICTED' "
+                                 "Releasability= Only= Limited= AdministrativeMarkings= "},
+    )
+
+    findings = analyze([doc], targets=["example.gov"])
+
+    # empty markings are skipped; the tracking id isn't a label
+    assert set(findings.classification_labels) == {"Ownership: None (Public)", "Classification: NATO RESTRICTED"}
+    assert findings.restricted_classification_labels == ["Classification: NATO RESTRICTED"]
+
+
+def test_analyze_public_labels_are_not_treated_as_restricted():
+    doc = DocumentMetadata(
+        url="https://example.gov/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={"XML:Classification": "Public", "XML:MSIP_Label_9_Name": "Genel"},
+    )
+
+    findings = analyze([doc], targets=["example.gov"])
+
+    assert set(findings.classification_labels) == {"Public", "Genel"}
+    assert findings.restricted_classification_labels == []

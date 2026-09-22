@@ -113,6 +113,11 @@ class ScanFindings:
     # Word doc) — a classic FOCA-style finding: metadata leaking someone's
     # physical location, not just software/username info.
     geolocation: dict[str, Finding] = field(default_factory=dict)
+    # Data-classification / sensitivity markings the authoring tool wrote into
+    # the file (Microsoft Purview/AIP "MSIP_Label_*", TITUS, or a plain
+    # Classification property). A document marked for internal use that is
+    # nonetheless published is a finding in itself.
+    classification_labels: dict[str, Finding] = field(default_factory=dict)
     content_findings: list[ContentFinding] = field(default_factory=list)
     # Opt-in (ScanConfig.critical_files) — see CriticalFile above.
     critical_files: list[CriticalFile] = field(default_factory=list)
@@ -121,6 +126,12 @@ class ScanFindings:
     @property
     def documents_with_metadata(self) -> int:
         return sum(1 for d in self.documents if d.raw and not d.error)
+
+    @property
+    def restricted_classification_labels(self) -> list[str]:
+        """Labels that mark a document as *not* meant to be public."""
+        from .metadata.analyzer import RESTRICTED_LABEL_RE
+        return [v for v in self.classification_labels if RESTRICTED_LABEL_RE.search(v)]
 
     @property
     def documents_from_archive(self) -> int:

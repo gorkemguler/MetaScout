@@ -153,13 +153,14 @@
     <div class="meta-row">
       <span class="meta-item">Hedef{{ "ler" if findings.targets | length > 1 else "" }}: <strong>{{ findings.targets | join(", ") }}</strong></span>
       <span class="meta-item">Tarama tarihi: <strong>{{ findings.scanned_at.strftime("%d.%m.%Y %H:%M") }} UTC</strong></span>
-      <span class="meta-item">Taranan belge: <strong>{{ findings.documents | length }}</strong></span>
-      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length %}
+      <span class="meta-item">Keşfedilen belge: <strong>{{ findings.documents | length }}</strong></span>
+      <span class="meta-item">Metadata okunan: <strong>{{ findings.documents_with_metadata }}</strong></span>
+      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length + findings.classification_labels|length %}
       {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.critical_files|length %}
       {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
       {% if total_findings == 0 and not findings.content_findings and not findings.critical_files %}
         <span class="badge badge-none">Bulgu Yok</span>
-      {% elif critical_content_hits > 0 or findings.geolocation %}
+      {% elif critical_content_hits > 0 or findings.geolocation or findings.restricted_classification_labels %}
         <span class="badge badge-high">Yüksek Risk</span>
       {% elif sensitive_hits == 0 and not findings.content_findings %}
         <span class="badge badge-low">Düşük Risk</span>
@@ -196,6 +197,11 @@
           yayında değil; kopya <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback
           Machine</a> arşivinden alındı ve aşağıdaki listede <span class="archive-badge">arşiv</span>
           rozetiyle işaretlendi. Bunlar siteden kaldırılmış olsa da arşiv üzerinden hâlâ herkese açık.
+        {% endif %}
+        {% if findings.restricted_classification_labels %}
+          Belgelerin bir kısmı <strong>herkese açık olmaması gerektiğini belirten gizlilik etiketi</strong>
+          taşıyor ({{ findings.restricted_classification_labels | join(", ") | truncate(120) }}) — aşağıdaki
+          <a href="#classification">Gizlilik Etiketleri</a> bölümüne bakın.
         {% endif %}
         {% if findings.geolocation %}
           Ayrıca, belgelere yapıştırılmış fotoğraflarda gömülü
@@ -250,7 +256,7 @@
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>Hedef</th><th>Bulunan belge</th></tr></thead>
+        <thead><tr><th>Hedef</th><th>Metadata okunan belge</th></tr></thead>
         <tbody>
         {% for t, count in findings.documents_by_target.items() %}
           <tr><td class="value">{{ t }}</td><td class="count">{{ count }}</td></tr>
@@ -334,6 +340,18 @@
       {{ finding_table(findings.servers_and_printers, "Sunucu / yazıcı") }}
     </section>
     {% if findings.geolocation %}
+    <section id="classification">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg></div>
+        <h2>Gizlilik Etiketleri</h2>
+        <span class="n">{{ findings.classification_labels | length }}</span>
+      </div>
+      {% if findings.restricted_classification_labels %}
+      <p class="empty" style="color:var(--bad)">Bu belgelerin bir kısmı, herkese açık olmaması gerektiğini
+      söyleyen bir gizlilik etiketi taşıyor. Etiket belgenin metadata'sında duruyor; belgenin kendisi yayında.</p>
+      {% endif %}
+      {{ finding_table(findings.classification_labels, "Etiket") }}
+    </section>
     <section id="geolocation">
       <div class="section-head">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg></div>

@@ -86,3 +86,21 @@ def test_html_report_marks_documents_that_came_from_the_archive(lang, label):
     # Only the archived one is badged, and the live document keeps its own URL.
     assert html.count('class="archive-badge"') == 2  # summary legend + table row
     assert "https://example.com/live.pdf" in html
+
+
+def _classified_findings():
+    doc = DocumentMetadata(
+        url="https://example.gov/plan.docx", local_path="/tmp/a.docx", filetype="docx",
+        raw={"XML:MSIP_Label_1_Name": "Confidential - Internal", "PDF:Author": "jdoe"},
+    )
+    return analyze([doc], targets=["example.gov"])
+
+
+@pytest.mark.parametrize("lang,heading", [("en", "Classification Labels"), ("tr", "Gizlilik Etiketleri")])
+def test_html_report_shows_classification_labels_and_raises_risk(lang, heading):
+    html = render_html_report(_classified_findings(), lang=lang)
+
+    assert heading in html
+    assert "Confidential - Internal" in html
+    # a label saying "not public" is a high-risk finding on its own
+    assert "badge-high" in html

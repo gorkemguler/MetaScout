@@ -68,6 +68,7 @@ def _print_summary(findings) -> None:
         ("Internal paths", findings.internal_paths),
         ("Servers / printers", findings.servers_and_printers),
         ("Geolocation (GPS)", findings.geolocation),
+        ("Classification labels", findings.classification_labels),
         ("Critical files (opt-in)", findings.critical_files),
     ]:
         table.add_row(label, str(len(bucket)))
