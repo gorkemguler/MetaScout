@@ -73,3 +73,159 @@ def test_analyze_counts_documents_per_target():
     findings = analyze(docs, targets=["example.com", "example.org"])
 
     assert findings.documents_by_target == {"example.com": 1, "example.org": 2}
+
+
+def test_analyze_extracts_posix_paths_from_list_valued_xmp_tags():
+    # exiftool -j emits multi-valued XMP (xmpMM:Ingredients / xmpMM:Manifest
+    # stRef:filePath of an InDesign/Illustrator PDF) as JSON lists, with
+    # spaces and non-ASCII characters in the path segments.
+    placed = [
+        "/Users/designer-01/Desktop/Client Archive/2025 Annual Report/cover bg.tif",
+        "/Users/designer-01/Desktop/2025 Annual Report/ŞEHİR görsel.tif",
+    ]
+    doc = DocumentMetadata(
+        url="https://example.com/annual.pdf",
+        local_path="/tmp/annual.pdf",
+        filetype="pdf",
+        raw={
+            "XMP-xmpMM:IngredientsFilePath": placed,
+            "XMP-xmpMM:ManifestReferenceFilePath": placed + [placed[0]],
+            "XMP-xmpMM:HistorySoftwareAgent": ["Adobe Illustrator 28.0 (Macintosh)"],
+            "XMP-xmpTPg:SwatchColorantTint": [100.0, 50.0],
+            "PostScript:For": ["Designer-01", ""],
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.internal_paths) == set(placed)
+    assert findings.internal_paths[placed[0]].field_name == "IngredientsFilePath"
+    assert "designer-01" in findings.usernames
+    assert findings.usernames["designer-01"].field_name == "home directory"
+    assert "Designer-01" in findings.usernames
+    assert "Adobe Illustrator 28.0 (Macintosh)" in findings.software
+
+
+def test_analyze_posix_paths_ignore_urls_and_match_file_uris():
+    doc = DocumentMetadata(
+        url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={
+            "XMP-xmpRights:WebStatement": "https://example.com/home/terms.html",
+            "XMP-dc:Format": "application/pdf",
+            "XMP-xmpMM:DerivedFromFilePath": "file:///Volumes/DesignShare/Projects/brochure.indd",
+            "XMP-pdf:Keywords": "draft at /home/alice/work/draft v2.odt, final elsewhere",
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.internal_paths) == {
+        "/Volumes/DesignShare/Projects/brochure.indd",
+        "/home/alice/work/draft v2.odt",
+    }
+    assert set(findings.usernames) == {"alice"}
+
+
+def test_analyze_forward_slash_windows_paths_and_generic_profiles():
+    doc = DocumentMetadata(
+        url="https://example.com/a.docx", local_path="/tmp/a.docx", filetype="docx",
+        raw={
+            "XMP-xmpMM:DerivedFromFilePath": "file:///D:/Users/bsmith/Projects/plan.docx",
+            "XMP-xmpMM:IngredientsFilePath": ["/Users/Shared/Stock/photo.jpg", "C:\\Users\\Public\\Pictures\\logo.png"],
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert "D:/Users/bsmith/Projects/plan.docx" in findings.internal_paths
+    assert "/Users/Shared/Stock/photo.jpg" in findings.internal_paths
+    assert set(findings.usernames) == {"bsmith"}
+
+
+def test_analyze_ignores_scanners_own_download_location():
+    # System:* describes the local downloaded copy — its path is the
+    # *scanning* machine's, never a finding about the target.
+    doc = DocumentMetadata(
+        url="https://example.com/a.pdf", local_path="/Users/analyst/out/a.pdf", filetype="pdf",
+        raw={
+            "System:Directory": "/Users/analyst/metascout_output/downloads",
+            "System:FileName": "abc_a.pdf",
+            "PDF:Author": "jdoe",
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert findings.internal_paths == {}
+    assert set(findings.usernames) == {"jdoe"}
+
+
+def test_analyze_pdf_and_postscript_creator_is_software_not_username():
+    # PDF Info /Creator and PostScript %%Creator name the producing app;
+    # only XMP-dc:Creator is a person.
+    doc = DocumentMetadata(
+        url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={
+            "PDF:Creator": "Adobe InDesign 20.4 (Macintosh)",
+            "PostScript:Creator": "Adobe Illustrator(R) 24.0",
+            "XMP-dc:Creator": ["Jane Author"],
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.usernames) == {"Jane Author"}
+    assert {"Adobe InDesign 20.4 (Macintosh)", "Adobe Illustrator(R) 24.0"} <= set(findings.software)
+
+
+def test_analyze_reads_embedded_content_keys():
+    # -G3:1 -ee keys ("Doc1:Group:Tag") and pictures pulled out of an
+    # OOXML container ("<member>:Group:Tag") keep their field semantics.
+    doc = DocumentMetadata(
+        url="https://example.com/a.docx", local_path="/tmp/a.docx", filetype="docx",
+        raw={
+            "Doc1:XMP-xmpMM:DerivedFromFilePath": "/Volumes/DesignShare/Stock/city.psd",
+            "Doc1:PDF:Creator": "Adobe Photoshop 25.0 (Windows)",
+            "word/media/image1.jpeg:IFD0:Artist": "Jane Photographer",
+            "word/media/image1.jpeg:XMP-photoshop:CaptionWriter": "Cap Writer",
+            "word/media/image1.jpeg:Composite:GPSPosition": "41.015137 N, 28.979530 E",
+            "XML:Manager": "Bob Manager",
+            "XMP-meta:Initial-creator": "First Person",
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert "/Volumes/DesignShare/Stock/city.psd" in findings.internal_paths
+    assert "Adobe Photoshop 25.0 (Windows)" in findings.software
+    assert set(findings.usernames) == {"Jane Photographer", "Cap Writer", "Bob Manager", "First Person"}
+    assert findings.usernames["Jane Photographer"].field_name == "Artist"
+    assert "41.015137 N, 28.979530 E" in findings.geolocation
+
+
+def test_analyze_skips_adobe_scratch_files_but_keeps_real_tmp_paths():
+    doc = DocumentMetadata(
+        url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={"XMP-xmpMM:ManifestReferenceFilePath": [
+            "/var/tmp/wv93Ri.tif", "/private/var/tmp/RgGVnC.tif", "/tmp/Budget Draft 2025.xlsx",
+        ]},
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.internal_paths) == {"/tmp/Budget Draft 2025.xlsx"}
+
+
+def test_analyze_internal_hosts_in_metadata_urls():
+    doc = DocumentMetadata(
+        url="https://example.com/a.docx", local_path="/tmp/a.docx", filetype="docx",
+        raw={
+            "XML:HyperlinkBase": "http://intranet.acme.local/docs/",
+            "XMP-xmp:BaseURL": "http://10.20.30.40/share/",
+            "XMP-xmpRights:WebStatement": "https://www.example.com/terms",
+        },
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.servers_and_printers) == {"intranet.acme.local", "10.20.30.40"}

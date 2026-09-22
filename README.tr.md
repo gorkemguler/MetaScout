@@ -67,15 +67,27 @@ kurulan bir alternatif.
 Bir hedefte yayınlanmış PDF/Office belgelerini keşfeder, indirir, her birinin
 metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları raporlar:
 
-- **Kullanıcı adları** (belge yazarları, son düzenleyenler, ev dizini yolları)
+- **Kullanıcı adları** (belge yazarları, son düzenleyenler, yöneticiler,
+  Illustrator/EPS dosyasının oluşturulduğu işletim sistemi hesabı, gömülü
+  fotoğrafların fotoğrafçıları, ev dizini yolları)
 - **E-posta adresleri**
-- **Yazılım / sürüm bilgisi** (Office sürümü, PDF üretici yazılımı vb.)
+- **Yazılım / sürüm bilgisi** (Office sürümü, PDF üretici/oluşturucu
+  uygulama, düzenleme geçmişi vb.)
 - **İşletim sistemi** ipuçları
-- **İç dosya yolları** (`C:\Users\...`, ağ paylaşımları)
-- **Sunucu / yazıcı isimleri** (UNC yolları, `\\server\share`)
+- **İç dosya yolları** — Windows (`C:\Users\...`), ağ paylaşımları ve
+  macOS/Linux (`/Users/...`, `/Volumes/<paylaşım>/...`, `/home/...`);
+  InDesign/Illustrator PDF'lerine yerleştirilen her görselin kaynak dosyası
+  dahil (XMP `xmpMM:Ingredients` / `xmpMM:Manifest`)
+- **Sunucu / yazıcı isimleri** (UNC yolları, `\\server\share`, Office
+  `HyperlinkBase` gibi alanlardaki intranet sunucu adları ve özel IP'ler)
 - **GPS koordinatları**, konum bilgisi içeren bir fotoğraf (ör. bir
   belgeye yapıştırılmış telefon fotoğrafı) belgeye gömülüyse — raporda
   haritada görüntüleme linki de sunulur
+
+Yalnızca dosyanın kendi metadata'sı değil, gömülü içerik de okunur: PDF'e
+yerleştirilmiş görseller ve Illustrator verisi (exiftool `-ee`) ile
+DOCX/XLSX/PPTX/ODF dosyalarının içindeki resimler, her biri kendi EXIF/XMP
+bilgisiyle.
 
 ## Özellikler
 

@@ -66,15 +66,26 @@ command-line tool that installs the same way on macOS, Linux, and Windows.
 It discovers PDF/Office documents published on a target, downloads them,
 extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 
-- **Usernames** (document authors, last-modified-by, home directory paths)
+- **Usernames** (document authors, last-modified-by, managers, the OS
+  account an Illustrator/EPS file was made "for", photographers of embedded
+  photos, home directory paths)
 - **Email addresses**
-- **Software / version info** (Office build, PDF producer, etc.)
+- **Software / version info** (Office build, PDF producer/creator app, edit
+  history, etc.)
 - **Operating system** hints
-- **Internal file paths** (`C:\Users\...`, network shares)
-- **Server / printer names** (UNC paths, `\\server\share`)
+- **Internal file paths** — Windows (`C:\Users\...`), network shares, and
+  macOS/Linux (`/Users/...`, `/Volumes/<share>/...`, `/home/...`), including
+  the source file of every image placed in an InDesign/Illustrator PDF
+  (XMP `xmpMM:Ingredients` / `xmpMM:Manifest`)
+- **Server / printer names** (UNC paths, `\\server\share`, intranet
+  hostnames and private IPs such as an Office `HyperlinkBase`)
 - **GPS coordinates**, when a photo with location EXIF data (e.g. a phone
   photo pasted into a Word doc) is embedded in a document — a link to view
   it on a map is included in the report
+
+Embedded content is read too, not just the file's own metadata: the images
+and Illustrator data placed inside a PDF (exiftool `-ee`), and the pictures
+inside DOCX/XLSX/PPTX/ODF files, each with its own EXIF/XMP.
 
 ## Features
 
