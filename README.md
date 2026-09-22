@@ -33,6 +33,7 @@
   - [Windows](#windows)
   - [Verify the install](#verify-the-install)
   - [Global install (pipx)](#global-install-pipx)
+  - [Updating](#updating)
 - [Quick start](#quick-start)
 - [Scanning multiple targets](#scanning-multiple-targets)
 - [Scanning a manual URL list](#scanning-a-manual-url-list)
@@ -258,6 +259,33 @@ pipx install --editable /full/path/to/metascout
 `--editable` means code changes under `src/metascout/` take effect
 immediately, no reinstall needed. After this, `metascout` works from any
 directory without activating a venv.
+
+### Updating
+
+Once MetaScout is installed, a new release doesn't mean cloning or
+installing again:
+
+```bash
+metascout update --check   # is there a newer release?
+metascout update           # install it
+metascout --version        # which version is installed
+```
+
+`metascout update` looks up the latest
+[GitHub release](https://github.com/gorkemguler/MetaScout/releases) and
+updates the copy you're running, whichever way it was installed:
+
+- **Git clone** (`pip install -e .` or `pipx install --editable`, as above):
+  fast-forwards the clone to the release tag. Dependencies are reinstalled
+  only if the release changed them, and optional extras you already have
+  (e.g. `[content-scan]`) are kept. If the clone has uncommitted changes or
+  commits of your own, it stops and says so instead of touching them.
+- **Plain pip install**: upgrades from the release's source archive.
+- **Docker**: an image can't update itself. Rebuild it from your clone:
+  `git pull && docker compose up -d --build`.
+
+`metascout update` exists from v0.2.2 on. On an older version, run
+`git pull` in your clone once to get it.
 
 ## Quick start
 
@@ -937,6 +965,7 @@ metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
+metascout update --help
 ```
 
 `metascout scan` takes one or more `TARGET` positional arguments
@@ -1078,7 +1107,8 @@ src/metascout/
 │   ├── jobs.py               in-memory job registry + background thread pool that runs the pipeline
 │   └── schemas.py            Pydantic request/response models (also drives the auto-generated /docs)
 ├── pipeline.py              discover → download → extract → analyze flow (shared by CLI, web, and api)
-├── cli.py                   click-based `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` commands
+├── updater.py               `metascout update`: latest GitHub release → git fast-forward / pip upgrade
+├── cli.py                   click-based `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` / `update` commands
 └── web.py                   Flask-based local web UI
 ```
 

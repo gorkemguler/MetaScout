@@ -8,6 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.table import Table
 
+from . import __version__
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig, default_engines, hosts_of
 from .pipeline import run_scan
 from .report import render_html_report, render_json_report
@@ -112,6 +113,7 @@ def _collect_urls(urls_file: str | None) -> list[str]:
 
 
 @click.group()
+@click.version_option(__version__, prog_name="metascout")
 def main() -> None:
     """MetaScout — document discovery and metadata reconnaissance tool."""
     # load_dotenv() alone searches upward from this installed module's file
@@ -531,6 +533,51 @@ def api(host: str, port: int, output_dir: str, max_workers: int, max_pending: in
     console.print("[dim]No built-in authentication — see the README before exposing this beyond a trusted machine/network.[/dim]\n")
     app = create_app(output_dir=output_dir, max_workers=max_workers, max_pending=max_pending)
     uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+@main.command()
+@click.option("--check", is_flag=True, default=False, help="Only report whether a newer release exists; change nothing.")
+def update(check: bool) -> None:
+    """Update MetaScout to the latest GitHub release in place — no need to
+    clone/install again. A git-clone install is fast-forwarded to the release
+    tag (dependencies reinstalled only if they changed); a plain pip install
+    is upgraded from the release archive. Docker images have to be rebuilt.
+    """
+    from . import updater
+
+    console.print(f"Installed version: [bold]{__version__}[/bold]")
+    try:
+        tag = updater.latest_release_tag()
+    except updater.UpdateError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        sys.exit(1)
+    latest = tag.lstrip("v")
+    if updater.parse_version(latest) <= updater.parse_version(__version__):
+        console.print(f"[green]Already up to date[/green] (latest release: {latest}).")
+        return
+
+    notes_url = f"{updater.REPO_URL}/releases/tag/{tag}"
+    console.print(f"New version available: [bold]{latest}[/bold]  ({notes_url})")
+    if check:
+        console.print("Run [bold]metascout update[/bold] to install it.")
+        return
+
+    root = updater.source_checkout()
+    if root is None and updater.in_docker():
+        console.print("[yellow]Running inside Docker: the image can't update itself. On the host, in your clone:[/yellow]")
+        console.print("  git pull && docker compose up -d --build")
+        console.print("[dim](or `git pull && docker build -t metascout .` if you use docker run)[/dim]")
+        sys.exit(1)
+
+    try:
+        if root is not None:
+            updater.update_git_checkout(root, tag, log=_cli_log)
+        else:
+            updater.update_pip_install(tag, log=_cli_log)
+    except updater.UpdateError as exc:
+        console.print(f"[bold red]Update failed.[/bold red] {exc}")
+        sys.exit(1)
+    console.print(f"[bold green]Updated to {latest}.[/bold green] What's new: {notes_url}")
 
 
 if __name__ == "__main__":

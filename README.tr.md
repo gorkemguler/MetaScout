@@ -33,6 +33,7 @@
   - [Windows](#windows)
   - [Kurulumu doğrulama](#kurulumu-doğrulama)
   - [Global kurulum (pipx)](#global-kurulum-pipx)
+  - [Güncelleme](#güncelleme)
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Çoklu hedef taraması](#çoklu-hedef-taraması)
 - [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
@@ -259,6 +260,33 @@ pipx install --editable /tam/yol/metascout
 `--editable` sayesinde `src/metascout/` altında yapılan kod değişiklikleri
 yeniden kurmaya gerek kalmadan otomatik yansır. Kurulumdan sonra `metascout`
 komutu hangi dizinde olursanız olun, venv aktive etmeden çalışır.
+
+### Güncelleme
+
+MetaScout bir kez kurulduktan sonra yeni bir sürüm için tekrar klonlamak ya
+da yeniden kurmak gerekmez:
+
+```bash
+metascout update --check   # daha yeni bir sürüm var mı?
+metascout update           # varsa kur
+metascout --version        # kurulu sürüm hangisi
+```
+
+`metascout update` en son [GitHub sürümüne](https://github.com/gorkemguler/MetaScout/releases)
+bakar ve çalışan kopyayı, hangi yolla kurulduysa ona uygun şekilde günceller:
+
+- **Git klonu** (yukarıdaki gibi `pip install -e .` ya da
+  `pipx install --editable`): klonu sürüm etiketine ilerletir. Bağımlılıklar
+  yalnızca yeni sürüm onları değiştirdiyse yeniden kurulur, kurulu olan
+  opsiyonel paketler (ör. `[content-scan]`) korunur. Klonda commit
+  edilmemiş değişiklikler ya da size ait commit'ler varsa onlara dokunmaz,
+  durup bunu bildirir.
+- **Normal pip kurulumu**: sürümün kaynak arşivinden yükseltir.
+- **Docker**: imaj kendini güncelleyemez. Klonunuzda yeniden derleyin:
+  `git pull && docker compose up -d --build`.
+
+`metascout update` v0.2.2 ile geldi. Daha eski bir sürümdeyseniz bir kez
+klonunuzda `git pull` çalıştırmanız yeterli.
 
 ## Hızlı başlangıç
 
@@ -963,6 +991,7 @@ metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
+metascout update --help
 ```
 
 `metascout scan` bir veya daha fazla `TARGET` pozisyonel argümanı alır
@@ -1104,7 +1133,8 @@ src/metascout/
 │   ├── jobs.py               bellek-içi job kaydı + pipeline'ı çalıştıran arka plan thread havuzu
 │   └── schemas.py            Pydantic istek/yanıt modelleri (otomatik üretilen /docs'u da besler)
 ├── pipeline.py              discover → download → extract → analyze akışı (CLI, web ve api'nin ortak motoru)
-├── cli.py                   click tabanlı `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` komutları
+├── updater.py               `metascout update`: en son GitHub sürümü → git ile ilerletme / pip ile yükseltme
+├── cli.py                   click tabanlı `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` / `update` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 
