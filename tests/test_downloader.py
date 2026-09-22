@@ -91,3 +91,34 @@ def test_download_one_does_not_try_archive_url_when_same_as_url(tmp_path):
 
     assert result.error == "404"
     assert session.get.call_count == 1
+
+
+def test_download_one_records_the_archive_url_it_actually_fetched_from(tmp_path):
+    doc = DiscoveredDocument(
+        url="https://example.com/removed.pdf",
+        source=DiscoverySource.WAYBACK,
+        filetype="pdf",
+        archive_url="https://web.archive.org/web/20200101000000id_/https://example.com/removed.pdf",
+    )
+    session = MagicMock()
+    session.get.side_effect = [requests.exceptions.HTTPError("404 Not Found"), _FakeResp(b"archived")]
+
+    result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    # The report needs to say this copy is only still public via the archive.
+    assert result.archive_url == doc.archive_url
+
+
+def test_download_one_leaves_archive_url_empty_when_the_live_url_served_the_file(tmp_path):
+    doc = DiscoveredDocument(
+        url="https://example.com/live.pdf",
+        source=DiscoverySource.WAYBACK,
+        filetype="pdf",
+        archive_url="https://web.archive.org/web/20200101000000id_/https://example.com/live.pdf",
+    )
+    session = MagicMock()
+    session.get.return_value = _FakeResp(b"pdf-bytes")
+
+    result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    assert result.archive_url is None

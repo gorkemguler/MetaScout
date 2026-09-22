@@ -25,6 +25,9 @@ def render_json_report(findings: ScanFindings) -> str:
                 "filetype": d.filetype,
                 "local_path": d.local_path,
                 "error": d.error,
+                # Non-null when the live URL no longer served the file and
+                # the copy came from this Wayback snapshot instead.
+                "archive_url": d.archive_url,
                 "metadata": d.raw,
             }
             for d in findings.documents

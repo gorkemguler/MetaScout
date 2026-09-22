@@ -152,18 +152,24 @@ def extract_metadata(
                 continue
             seen_paths.add(doc.local_path)
             record.update(_embedded_media_metadata(doc, per_file_timeout))
-            results.append(DocumentMetadata(url=doc.url, local_path=doc.local_path, filetype=doc.filetype, raw=record))
+            results.append(DocumentMetadata(
+                url=doc.url, local_path=doc.local_path, filetype=doc.filetype,
+                raw=record, archive_url=doc.archive_url,
+            ))
         for doc in batch:
             if doc.local_path not in seen_paths:
                 results.append(
                     DocumentMetadata(
                         url=doc.url, local_path=doc.local_path, filetype=doc.filetype,
-                        error="exiftool produced no output for this file",
+                        error="exiftool produced no output for this file", archive_url=doc.archive_url,
                     )
                 )
 
     for doc in downloaded:
         if doc.error:
-            results.append(DocumentMetadata(url=doc.url, local_path=doc.local_path, filetype=doc.filetype, error=doc.error))
+            results.append(DocumentMetadata(
+                url=doc.url, local_path=doc.local_path, filetype=doc.filetype,
+                error=doc.error, archive_url=doc.archive_url,
+            ))
 
     return results

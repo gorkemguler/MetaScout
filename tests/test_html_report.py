@@ -61,3 +61,28 @@ def test_render_html_report_no_findings_badge_suppressed_when_only_critical_file
     findings.critical_files = [CriticalFile(url="https://example.com/.env", filetype="env", source=DiscoverySource.CRAWL)]
     html = render_html_report(findings, lang="en")
     assert "No Findings</span>" not in html
+
+
+def _archive_findings():
+    live = DocumentMetadata(
+        url="https://example.com/live.pdf", local_path="/tmp/live.pdf", filetype="pdf",
+        raw={"PDF:Author": "jdoe"},
+    )
+    archived = DocumentMetadata(
+        url="https://example.com/removed.pdf", local_path="/tmp/removed.pdf", filetype="pdf",
+        raw={"PDF:Author": "asmith"},
+        archive_url="https://web.archive.org/web/20200101000000id_/https://example.com/removed.pdf",
+    )
+    return analyze([live, archived], targets=["example.com"])
+
+
+@pytest.mark.parametrize("lang,label", [("en", "archive"), ("tr", "arşiv")])
+def test_html_report_marks_documents_that_came_from_the_archive(lang, label):
+    html = render_html_report(_archive_findings(), lang=lang)
+
+    assert 'class="archive-badge"' in html
+    assert ">" + label + "</a>" in html
+    assert "https://web.archive.org/web/20200101000000id_/https://example.com/removed.pdf" in html
+    # Only the archived one is badged, and the live document keeps its own URL.
+    assert html.count('class="archive-badge"') == 2  # summary legend + table row
+    assert "https://example.com/live.pdf" in html

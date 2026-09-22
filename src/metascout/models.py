@@ -37,6 +37,11 @@ class DownloadedDocument:
     sha256: str = ""
     size_bytes: int = 0
     error: str | None = None
+    # Set only when the bytes came from a Wayback snapshot because `url`
+    # itself no longer served the file: the document is gone from the live
+    # site but still public through the archive, which changes what the
+    # finding means (and where a reader has to go to verify it).
+    archive_url: str | None = None
 
 
 @dataclass
@@ -46,6 +51,8 @@ class DocumentMetadata:
     filetype: str
     raw: dict = field(default_factory=dict)
     error: str | None = None
+    # See DownloadedDocument.archive_url.
+    archive_url: str | None = None
 
 
 @dataclass
@@ -114,6 +121,10 @@ class ScanFindings:
     @property
     def documents_with_metadata(self) -> int:
         return sum(1 for d in self.documents if d.raw and not d.error)
+
+    @property
+    def documents_from_archive(self) -> int:
+        return sum(1 for d in self.documents if d.archive_url and not d.error)
 
     @property
     def content_findings_by_category(self) -> dict[str, list[ContentFinding]]:

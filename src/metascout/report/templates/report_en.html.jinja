@@ -88,6 +88,13 @@
   .empty { color: var(--muted2); font-style: italic; padding: 16px 0; font-size: 13px; }
   .status-ok { color: var(--good); font-weight: 600; }
   .status-err { color: var(--bad); }
+  .archive-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--warn); background: rgba(242,166,90,0.14);
+    border: 1px solid rgba(242,166,90,0.35); border-radius: 5px;
+    padding: 2px 6px; margin-left: 6px; text-decoration: none; white-space: nowrap;
+  }
+  .archive-badge:hover { text-decoration: underline; }
   .filetype-badge {
     display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
     font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--panel);
@@ -177,6 +184,12 @@
         {% else %}
           No direct username/email/server leaks were detected; findings are mostly
           software and operating system information.
+        {% endif %}
+        {% if findings.documents_from_archive %}
+          <strong>{{ findings.documents_from_archive }}</strong> of them are no longer live on the
+          site: the copy came from the <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback
+          Machine</a> archive instead, and is marked <span class="archive-badge">archive</span> in the
+          list below. Removed from the site, these are still public through the archive.
         {% endif %}
         {% if findings.geolocation %}
           <strong>{{ findings.geolocation | length }} GPS location(s)</strong> were also
@@ -420,7 +433,10 @@
         <tbody>
         {% for d in findings.documents %}
           <tr>
-            <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a></td>
+            <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a>
+              {%- if d.archive_url %}<a class="archive-badge" href="{{ d.archive_url }}" target="_blank" rel="noopener"
+                title="This document is no longer live on the site; the copy came from the Wayback Machine archive. The link opens the archived snapshot.">archive</a>{% endif %}
+            </td>
             <td><span class="filetype-badge">{{ d.filetype }}</span></td>
             <td>
               {% if d.error %}<span class="status-err">error: {{ d.error }}</span>

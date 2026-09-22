@@ -60,3 +60,24 @@ def test_visual_signature_scan_writes_results_json(tmp_path):
     assert out_file.exists()
     payload = json.loads(out_file.read_text())
     assert payload == [{"url": "https://example.com/a.pdf", "filetype": "pdf", "visual_signature_detected": True}]
+
+
+def test_summary_notes_documents_that_came_from_the_archive(capsys):
+    from metascout.cli import _print_summary
+    from metascout.metadata.analyzer import analyze
+    from metascout.models import DocumentMetadata
+
+    docs = [
+        DocumentMetadata(url="https://example.com/live.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+                         raw={"PDF:Author": "jdoe"}),
+        DocumentMetadata(url="https://example.com/gone.pdf", local_path="/tmp/b.pdf", filetype="pdf",
+                         raw={"PDF:Author": "asmith"},
+                         archive_url="https://web.archive.org/web/20200101000000id_/https://example.com/gone.pdf"),
+    ]
+
+    _print_summary(analyze(docs, targets=["example.com"]))
+
+    out = capsys.readouterr().out
+    # rich wraps at terminal width, so match on unwrapped fragments.
+    assert "1 document(s) were no longer live" in out
+    assert "Wayback Machine" in out

@@ -651,6 +651,14 @@ olmayan" şey olduğu için, MetaScout arka planda gerçek archive.org
 anlık görüntü adresini de tutar ve orijinal URL'den indirme başarısız
 olursa otomatik olarak oradan indirir.
 
+Dosya gerçekten bu yoldan geldiyse rapor bunu belirtir: belge, Belgeler
+tablosunda **arşiv** rozetiyle işaretlenir (rozet, geldiği anlık görüntüye
+bağlanır), özet bölümünde kaç belgenin arşivden geldiği yazar ve
+`report.json` içinde her belgenin `archive_url` alanında anlık görüntü
+adresi yer alır. Böyle bir belge canlı siteden kaldırılmıştır ama arşiv
+üzerinden hâlâ herkese açıktır — ne yapılacağına karar verirken bilinmesi
+gereken bir ayrım.
+
 ## Anahtarsız arama: DDGS
 
 `ddgs` motoru, [DDGS](https://pypi.org/project/ddgs/) adlı Python kütüphanesini

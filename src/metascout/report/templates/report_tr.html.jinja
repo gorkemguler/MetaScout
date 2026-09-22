@@ -88,6 +88,13 @@
   .empty { color: var(--muted2); font-style: italic; padding: 16px 0; font-size: 13px; }
   .status-ok { color: var(--good); font-weight: 600; }
   .status-err { color: var(--bad); }
+  .archive-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--warn); background: rgba(242,166,90,0.14);
+    border: 1px solid rgba(242,166,90,0.35); border-radius: 5px;
+    padding: 2px 6px; margin-left: 6px; text-decoration: none; white-space: nowrap;
+  }
+  .archive-badge:hover { text-decoration: underline; }
   .filetype-badge {
     display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
     font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--panel);
@@ -177,6 +184,12 @@
         {% else %}
           Doğrudan kullanıcı/e-posta/sunucu sızıntısı tespit edilmedi; bulgular çoğunlukla
           yazılım ve işletim sistemi bilgisinden oluşuyor.
+        {% endif %}
+        {% if findings.documents_from_archive %}
+          Bunlardan <strong>{{ findings.documents_from_archive }}</strong> tanesi sitede artık
+          yayında değil; kopya <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback
+          Machine</a> arşivinden alındı ve aşağıdaki listede <span class="archive-badge">arşiv</span>
+          rozetiyle işaretlendi. Bunlar siteden kaldırılmış olsa da arşiv üzerinden hâlâ herkese açık.
         {% endif %}
         {% if findings.geolocation %}
           Ayrıca, belgelere yapıştırılmış fotoğraflarda gömülü
@@ -422,7 +435,10 @@
         <tbody>
         {% for d in findings.documents %}
           <tr>
-            <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a></td>
+            <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a>
+              {%- if d.archive_url %}<a class="archive-badge" href="{{ d.archive_url }}" target="_blank" rel="noopener"
+                title="Bu belge sitede artık yayında değil; kopya Wayback Machine arşivinden alındı. Bağlantı arşivdeki kaydı açar.">arşiv</a>{% endif %}
+            </td>
             <td><span class="filetype-badge">{{ d.filetype }}</span></td>
             <td>
               {% if d.error %}<span class="status-err">hata: {{ d.error }}</span>

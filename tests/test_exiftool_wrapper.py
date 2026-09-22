@@ -100,3 +100,19 @@ def test_extract_metadata_does_not_open_pdfs_as_zip(tmp_path):
 
     assert calls == [[str(pdf)]]
     assert meta.raw == {"PDF:Author": "jdoe"}
+
+
+def test_extract_metadata_keeps_the_archive_url_of_a_document(tmp_path):
+    pdf = tmp_path / "removed.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    snapshot = "https://web.archive.org/web/20200101000000id_/https://example.com/removed.pdf"
+    doc = DownloadedDocument(
+        url="https://example.com/removed.pdf", local_path=str(pdf), filetype="pdf",
+        source=DiscoverySource.WAYBACK, archive_url=snapshot,
+    )
+
+    with patch.object(ew, "exiftool_available", return_value=True), \
+         patch.object(ew, "_run_exiftool_batch", return_value=[{"SourceFile": str(pdf), "PDF:Author": "jdoe"}]):
+        [meta] = ew.extract_metadata([doc])
+
+    assert meta.archive_url == snapshot

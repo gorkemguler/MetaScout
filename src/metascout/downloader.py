@@ -88,6 +88,7 @@ def _download_one(
             source=doc.source,
             sha256=sha256,
             size_bytes=size,
+            archive_url=attempt_url if attempt_url != doc.url else None,
         )
 
     return DownloadedDocument(url=doc.url, local_path="", filetype=doc.filetype, source=doc.source, error=last_error)

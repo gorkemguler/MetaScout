@@ -636,6 +636,14 @@ not twice. Since that original URL is often exactly what's gone, MetaScout
 also keeps the actual archive.org snapshot address behind the scenes and
 downloads from there automatically if fetching the original URL fails.
 
+When that fallback is what actually delivered the file, the report says so:
+the document is tagged **archive** in the Documents table (the tag links to
+the snapshot it came from), the summary counts how many documents arrived
+that way, and `report.json` carries the snapshot address in each document's
+`archive_url`. A document like that is gone from the live site but still
+public through the archive — worth knowing when you decide what to do about
+it.
+
 ## Keyless search with DDGS
 
 The `ddgs` engine wraps [DDGS](https://pypi.org/project/ddgs/), a Python
