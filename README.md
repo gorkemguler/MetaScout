@@ -47,6 +47,7 @@
   - [Visual (wet) signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
   - [OCR fallback for scanned documents](#ocr-fallback-for-scanned-documents)
 - [Critical / sensitive files discovery](#critical--sensitive-files-discovery-optional)
+- [PDF report](#pdf-report-optional)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
 - [Output layout](#output-layout)
@@ -490,6 +491,7 @@ curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
 | `GET /v1/scans/{job_id}/log` | Progress log lines collected so far (works while still running) |
 | `GET /v1/scans/{job_id}/report.json` | The full JSON report — 409 if not done yet |
 | `GET /v1/scans/{job_id}/report.html` | The full HTML report — 409 if not done yet |
+| `GET /v1/scans/{job_id}/report.pdf` | The report as a PDF (`?lang=en\|tr`) — 409 if not done yet, 501 without the `[pdf]` extra |
 | `GET /v1/scans/{job_id}/download` | Zip of the whole run (reports + downloaded documents) — 409 if not done yet |
 
 `metascout api` options:
@@ -911,6 +913,47 @@ with only critical files and no regular documents still produces a full
 report (risk badge included) instead of the old "nothing to analyze" dead
 end.
 
+## PDF report (optional)
+
+Alongside the HTML and JSON reports, MetaScout can produce a **PDF** — the
+same findings laid out for printing, attaching to a ticket, or sending to
+someone who won't open an HTML file:
+
+```bash
+pip install 'metascout[pdf]'
+```
+
+```bash
+metascout scan example.com --pdf-report
+```
+
+That writes `report.pdf` next to `report.html`, in whatever `--report-lang`
+you chose (`en` or `tr`).
+
+**Past scans too.** The PDF is built from a run's `report.json` alone, so any
+run you already have on disk — including ones from before this feature
+existed — can be turned into a PDF without re-scanning anything:
+
+```bash
+metascout pdf ./metascout_output/web-20260101-120000 --lang tr
+```
+
+Use `--out some/where.pdf` to write it elsewhere. In the web UI, every run in
+**History** has a **PDF** link, and the report page has a **Download PDF**
+button; both build the file on demand.
+
+The PDF contains the full report: targets, scan date and risk level, the
+summary counters, per-target document counts, every finding category with its
+metadata field and source document, the content-scan and critical-file
+sections when those ran, the document list (archived ones tagged), and the
+errors. Long tables are capped at 400 rows per section — `report.json` stays
+the complete record.
+
+The `[pdf]` extra installs [reportlab](https://pypi.org/project/reportlab/),
+which is pure Python (no system libraries) and ships the font the report
+uses, so the PDF comes out identical on macOS, Linux and Windows, Turkish
+characters included.
+
 ## Search engine API keys (optional)
 
 The `google`, `serper`, and `brave` engines run classic FOCA-style
@@ -973,6 +1016,7 @@ metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
+metascout pdf --help
 metascout update --help
 ```
 
@@ -1079,6 +1123,7 @@ metascout_output/
 ├── downloads/               raw downloaded documents (metascout scan)
 ├── report.html              visual summary report (metascout scan)
 ├── report.json              raw findings for automation/integration (metascout scan)
+├── report.pdf               printable report (--pdf-report, or `metascout pdf RUN_DIR` later)
 └── web-20260101-120000/     each metascout web run gets its own timestamped folder
     ├── downloads/
     ├── report.html
@@ -1108,6 +1153,7 @@ src/metascout/
 │   └── ocr.py               opt-in OCR fallback for scanned PDF pages (automatic once installed)
 ├── report/
 │   ├── html_report.py      Jinja2-based HTML report (report_en/report_tr.html.jinja)
+│   ├── pdf_report.py       opt-in PDF report built from a run's report.json ([pdf] extra)
 │   └── json_report.py      JSON report
 ├── diff.py                  compares two report.json payloads (new/removed docs, findings, content hits)
 ├── api/                      opt-in REST API service (`metascout api`), separate from web.py

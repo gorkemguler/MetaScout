@@ -47,6 +47,7 @@
   - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)
   - [Taranmış belgeler için OCR](#taranmış-belgeler-için-ocr)
 - [Kritik / hassas dosya keşfi](#kritik--hassas-dosya-keşfi-opsiyonel)
+- [PDF raporu](#pdf-raporu-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
 - [Çıktı yapısı](#çıktı-yapısı)
@@ -496,6 +497,7 @@ curl -s -o result.zip http://127.0.0.1:8000/v1/scans/<job_id>/download
 | `GET /v1/scans/{job_id}/log` | O ana kadar toplanan ilerleme log satırları (hâlâ çalışırken de işler) |
 | `GET /v1/scans/{job_id}/report.json` | Tam JSON rapor — henüz bitmemişse 409 |
 | `GET /v1/scans/{job_id}/report.html` | Tam HTML rapor — henüz bitmemişse 409 |
+| `GET /v1/scans/{job_id}/report.pdf` | Raporun PDF hâli (`?lang=en\|tr`) — bitmemişse 409, `[pdf]` eklentisi yoksa 501 |
 | `GET /v1/scans/{job_id}/download` | Tüm çalıştırmanın zip'i (raporlar + indirilen belgeler) — henüz bitmemişse 409 |
 
 `metascout api` seçenekleri:
@@ -936,6 +938,48 @@ sadece kritik dosya içeren, normal belge içermeyen bir dizin bile "analiz
 edilecek bir şey yok" eski çıkmazına düşmeden, risk rozeti dahil tam bir
 rapor üretiyor.
 
+## PDF raporu (opsiyonel)
+
+HTML ve JSON raporlarının yanında MetaScout **PDF** de üretebilir — aynı
+bulgular, yazdırmaya, bir kayda eklemeye ya da HTML dosyası açmayacak birine
+göndermeye uygun biçimde:
+
+```bash
+pip install 'metascout[pdf]'
+```
+
+```bash
+metascout scan example.com --pdf-report
+```
+
+Bu, `report.html` ile aynı klasöre `report.pdf` yazar; dil olarak
+`--report-lang` ile seçtiğiniz dili (`en` veya `tr`) kullanır.
+
+**Geçmiş taramalar için de.** PDF yalnızca bir çalıştırmanın `report.json`
+dosyasından üretilir; bu yüzden diskinizde duran her tarama — bu özellik
+eklenmeden önce yapılanlar dahil — yeniden tarama yapılmadan PDF'e
+dönüştürülebilir:
+
+```bash
+metascout pdf ./metascout_output/web-20260101-120000 --lang tr
+```
+
+Başka bir yere yazmak için `--out bir/yer.pdf` kullanın. Web arayüzünde
+**Geçmiş** sayfasındaki her çalıştırmanın yanında bir **PDF** bağlantısı,
+rapor sayfasında da **PDF indir** düğmesi var; ikisi de dosyayı o an üretir.
+
+PDF raporun tamamını içerir: hedefler, tarama tarihi ve risk seviyesi, özet
+sayaçları, hedef başına belge sayıları, her bulgu kategorisi (metadata alanı
+ve kaynak belgesiyle birlikte), çalıştıysa içerik taraması ve kritik dosya
+bölümleri, belge listesi (arşivden gelenler etiketli) ve hatalar. Uzun
+tablolar bölüm başına 400 satırla sınırlanır — tam kayıt yine
+`report.json`'dadır.
+
+`[pdf]` eklentisi saf Python olan (sistem kütüphanesi gerektirmeyen) ve
+raporun kullandığı fontu kendi içinde getiren
+[reportlab](https://pypi.org/project/reportlab/) kurar; böylece PDF macOS,
+Linux ve Windows'ta birebir aynı çıkar, Türkçe karakterler dahil.
+
 ## Arama motoru API anahtarları (opsiyonel)
 
 `google`, `serper` ve `brave` motorları klasik FOCA tarzı `site:hedef filetype:pdf`
@@ -999,6 +1043,7 @@ metascout api --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
+metascout pdf --help
 metascout update --help
 ```
 
@@ -1105,6 +1150,7 @@ metascout_output/
 ├── downloads/               indirilen ham belgeler (metascout scan)
 ├── report.html              görsel özet rapor (metascout scan)
 ├── report.json              otomasyon/entegrasyon için ham bulgular (metascout scan)
+├── report.pdf               yazdırılabilir rapor (--pdf-report ya da sonradan `metascout pdf RUN_DIR`)
 └── web-20260101-120000/     her metascout web taraması kendi zaman damgalı klasörüne yazılır
     ├── downloads/
     ├── report.html
@@ -1134,6 +1180,7 @@ src/metascout/
 │   └── ocr.py               taranmış PDF sayfaları için opsiyonel OCR fallback (kurulunca otomatik)
 ├── report/
 │   ├── html_report.py      Jinja2 tabanlı HTML rapor (report_en/report_tr.html.jinja)
+│   ├── pdf_report.py       opsiyonel PDF raporu, report.json'dan üretilir ([pdf] eklentisi)
 │   └── json_report.py      JSON rapor
 ├── diff.py                  iki report.json çıktısını karşılaştırır (yeni/kaldırılmış belge, bulgu, içerik sonucu)
 ├── api/                      opsiyonel REST API servisi (`metascout api`), web.py'dan ayrı

@@ -338,3 +338,38 @@ def test_job_queue_cap_returns_429_once_max_pending_reached(tmp_path):
         release.set()
         _wait_for_job(client, r1.json()["job_id"])
         _wait_for_job(client, r2.json()["job_id"])
+
+
+def test_report_pdf_endpoint(tmp_path):
+    client = _client(tmp_path)
+    doc = DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf", raw={"PDF:Author": "jdoe"})
+
+    with patch("metascout.api.app.run_scan", return_value=analyze([doc], targets=["example.com"])):
+        resp = client.post("/v1/scans", json={"targets": ["example.com"]})
+        job_id = resp.json()["job_id"]
+        assert resp.json()["links"]["report_pdf"].endswith("/report.pdf")
+        _wait_for_job(client, job_id)
+
+    r_pdf = client.get(f"/v1/scans/{job_id}/report.pdf", params={"lang": "tr"})
+    assert r_pdf.status_code == 200
+    assert r_pdf.headers["content-type"] == "application/pdf"
+    assert r_pdf.content.startswith(b"%PDF-")
+
+    assert client.get(f"/v1/scans/{job_id}/report.pdf", params={"lang": "de"}).status_code == 400
+
+
+def test_report_pdf_endpoint_returns_501_without_the_pdf_extra(tmp_path):
+    from metascout.report import PdfDependencyMissing
+
+    client = _client(tmp_path)
+    with patch("metascout.api.app.run_scan", return_value=analyze([], targets=["example.com"])):
+        job_id = client.post("/v1/scans", json={"targets": ["example.com"]}).json()["job_id"]
+        _wait_for_job(client, job_id)
+
+    with patch("metascout.api.app.render_pdf_report", side_effect=PdfDependencyMissing("needs reportlab")):
+        resp = client.get(f"/v1/scans/{job_id}/report.pdf")
+
+    assert resp.status_code == 501
+    assert "reportlab" in resp.json()["detail"]
+    # the other report formats are unaffected
+    assert client.get(f"/v1/scans/{job_id}/report.json").status_code == 200

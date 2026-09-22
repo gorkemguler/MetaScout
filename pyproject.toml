@@ -78,6 +78,13 @@ api = [
     "uvicorn>=0.29",
 ]
 
+# Opt-in PDF report (`--pdf-report`, `metascout pdf`, the web UI's PDF
+# button). reportlab is pure Python with no system libraries, and ships the
+# font the report uses, so this extra installs the same way everywhere.
+pdf = [
+    "reportlab>=4.0",
+]
+
 [project.scripts]
 metascout = "metascout.cli:main"
 

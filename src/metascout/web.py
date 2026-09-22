@@ -16,7 +16,7 @@ from flask import Flask, Response, abort, request, send_file, stream_with_contex
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig
 from .metadata import exiftool_available
 from .pipeline import run_local_document_scan, run_scan
-from .report import render_html_report, render_json_report
+from .report import PdfDependencyMissing, render_html_report, render_json_report, render_pdf_report
 
 # In-memory registry of live log lines per in-flight scan, so the browser can
 # stream them (via SSE, see /scan-log/<scan_id>) while the form's POST is
@@ -170,6 +170,7 @@ _STRINGS = {
         "history_type_local": "Existing Documents",
         "history_view_label": "View report",
         "history_download_label": "Download (.zip)",
+        "history_pdf_label": "PDF",
         "diff_heading": "Compare two runs",
         "diff_hint": "For tracking a target over time — pick an earlier and a later run to see what's "
                      "new (and what's gone) between them.",
@@ -311,6 +312,7 @@ _STRINGS = {
         "history_type_local": "Mevcut Belgeler",
         "history_view_label": "Raporu görüntüle",
         "history_download_label": "İndir (.zip)",
+        "history_pdf_label": "PDF",
         "diff_heading": "İki çalıştırmayı karşılaştır",
         "diff_hint": "Bir hedefi zaman içinde takip etmek için — daha erken ve daha geç bir "
                      "çalıştırma seçin, aralarında ne yeni (ve ne kaybolmuş) görün.",
@@ -832,7 +834,8 @@ def _render_history(ui_lang: str = "en", output_dir: str = "./metascout_output",
                 f'<td class="count">{documents}</td>'
                 f'<td class="doclist">{scanned_at}</td>'
                 f'<td><a href="/history/{run_id}">{html.escape(_t(ui_lang, "history_view_label"))}</a>'
-                f' &middot; <a href="/download/{run_id}" download>{html.escape(_t(ui_lang, "history_download_label"))}</a></td>'
+                f' &middot; <a href="/download/{run_id}" download>{html.escape(_t(ui_lang, "history_download_label"))}</a>'
+                f' &middot; <a href="/report-pdf/{run_id}?lang={ui_lang}">{html.escape(_t(ui_lang, "history_pdf_label"))}</a></td>'
                 "</tr>"
             )
         table = (
@@ -1082,7 +1085,10 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         os.makedirs(run_dir, exist_ok=True)
         run_id = os.path.basename(run_dir)
-        html = render_html_report(findings, lang=report_lang, download_url=f"/download/{run_id}")
+        html = render_html_report(
+            findings, lang=report_lang,
+            download_url=f"/download/{run_id}", pdf_url=f"/report-pdf/{run_id}?lang={report_lang}",
+        )
         with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
             fh.write(html)
         with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
@@ -1162,7 +1168,10 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
 
         os.makedirs(run_dir, exist_ok=True)
         run_id = os.path.basename(run_dir)
-        html = render_html_report(findings, lang=report_lang, download_url=f"/download/{run_id}")
+        html = render_html_report(
+            findings, lang=report_lang,
+            download_url=f"/download/{run_id}", pdf_url=f"/report-pdf/{run_id}?lang={report_lang}",
+        )
         with open(os.path.join(run_dir, "report.html"), "w", encoding="utf-8") as fh:
             fh.write(html)
         with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as fh:
@@ -1230,6 +1239,32 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         return send_file(
             buffer, mimetype="application/zip", as_attachment=True,
             download_name=f"metascout-{run_id}.zip",
+        )
+
+    @app.get("/report-pdf/<run_id>")
+    def report_pdf(run_id: str):
+        """Builds the PDF for a stored run on demand from its report.json —
+        including runs that finished long before PDF support existed, since
+        nothing but report.json is needed. `run_id` is server-generated but
+        validated here like every other stored-run route.
+        """
+        run_path = _resolve_run_path(output_dir, run_id)
+        if run_path is None:
+            abort(404)
+        report_json_path = os.path.join(run_path, "report.json")
+        if not os.path.isfile(report_json_path):
+            abort(404)
+        with open(report_json_path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+
+        try:
+            pdf_bytes = render_pdf_report(payload, lang=_clean_ui_lang(request.args.get("lang")))
+        except PdfDependencyMissing as exc:
+            return Response(f"{exc}\n", status=501, mimetype="text/plain")
+
+        return send_file(
+            io.BytesIO(pdf_bytes), mimetype="application/pdf",
+            as_attachment=True, download_name=f"metascout-{run_id}.pdf",
         )
 
     @app.get("/history")

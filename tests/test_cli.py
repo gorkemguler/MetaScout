@@ -81,3 +81,12 @@ def test_summary_notes_documents_that_came_from_the_archive(capsys):
     # rich wraps at terminal width, so match on unwrapped fragments.
     assert "1 document(s) were no longer live" in out
     assert "Wayback Machine" in out
+
+
+def test_cli_log_keeps_extras_in_install_advice(capsys):
+    """rich reads "[content-scan]" as a markup tag; the advice has to survive."""
+    from metascout.cli import _cli_log
+
+    _cli_log("! pypdf missing. Install with `pip install 'metascout[content-scan]'` for full coverage")
+
+    assert "metascout[content-scan]" in capsys.readouterr().out

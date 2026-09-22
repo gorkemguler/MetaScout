@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import zipfile
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from .. import __version__
 from ..config import ScanConfig, default_engines, hosts_of
 from ..models import ScanFindings
 from ..pipeline import run_local_document_scan, run_scan
+from ..report import PdfDependencyMissing, render_pdf_report
 from .jobs import Job, JobQueueFull, JobStore
 from .schemas import HealthResponse, JobCreated, JobLogResponse, JobStatusResponse, JobSummary, LocalScanRequest, ScanRequest
 
@@ -37,6 +39,7 @@ def _job_links(request: Request, job_id: str) -> dict[str, str]:
         "log": str(request.url_for("get_job_log", job_id=job_id)),
         "report_json": str(request.url_for("get_job_report_json", job_id=job_id)),
         "report_html": str(request.url_for("get_job_report_html", job_id=job_id)),
+        "report_pdf": str(request.url_for("get_job_report_pdf", job_id=job_id)),
         "download": str(request.url_for("get_job_download", job_id=job_id)),
     }
 
@@ -216,6 +219,25 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2, 
         job = _require_done_job(store, job_id)
         with open(os.path.join(job.run_path, "report.html"), encoding="utf-8") as fh:
             return fh.read()
+
+    @app.get("/v1/scans/{job_id}/report.pdf", tags=["scans"], name="get_job_report_pdf")
+    def get_job_report_pdf(job_id: str, lang: str = "en") -> Response:
+        """The report as a PDF, built on demand from the run's report.json.
+
+        Needs the optional [pdf] extra on the server; without it this
+        returns 501 while the JSON/HTML report keep working.
+        """
+        if lang not in ("en", "tr"):
+            raise HTTPException(status_code=400, detail="lang must be 'en' or 'tr'")
+        job = _require_done_job(store, job_id)
+        with open(os.path.join(job.run_path, "report.json"), encoding="utf-8") as fh:
+            payload = json.load(fh)
+        try:
+            pdf_bytes = render_pdf_report(payload, lang=lang)
+        except PdfDependencyMissing as exc:
+            raise HTTPException(status_code=501, detail=str(exc)) from exc
+        headers = {"Content-Disposition": f'attachment; filename="metascout-{job.run_id}.pdf"'}
+        return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
     @app.get("/v1/scans/{job_id}/download", tags=["scans"], name="get_job_download")
     def get_job_download(job_id: str) -> StreamingResponse:

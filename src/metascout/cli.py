@@ -6,12 +6,13 @@ import sys
 import click
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from . import __version__
 from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig, default_engines, hosts_of
 from .pipeline import run_scan
-from .report import render_html_report, render_json_report
+from .report import PdfDependencyMissing, render_html_report, render_json_report, render_pdf_report
 
 console = Console()
 
@@ -30,10 +31,29 @@ def _print_banner() -> None:
 
 
 def _cli_log(message: str) -> None:
+    # Pipeline messages are plain text, but they do contain things like
+    # "pip install 'metascout[content-scan]'" — escaped so rich doesn't read
+    # the extra's name as a markup tag and drop it from the advice.
+    message = escape(message)
     if message.startswith("!"):
         console.print(f"[yellow]{message}[/yellow]")
     else:
         console.print(f"[bold cyan]›[/bold cyan] {message}")
+
+
+def _write_pdf_report(payload: dict, path: str, lang: str) -> bool:
+    """Writes the PDF report, or explains what's missing. Returns whether it
+    was written — a missing optional extra shouldn't fail a finished scan."""
+    try:
+        pdf = render_pdf_report(payload, lang=lang)
+    except PdfDependencyMissing:
+        console.print("[bold red]PDF report skipped.[/bold red] Install the PDF extra first:")
+        console.print("  pip install 'metascout[pdf]'", markup=False)
+        return False
+    with open(path, "wb") as fh:
+        fh.write(pdf)
+    console.print(f"[green]PDF report:[/green] {path}")
+    return True
 
 
 def _print_summary(findings) -> None:
@@ -185,6 +205,12 @@ def main() -> None:
     "--critical-file-types", default=",".join(DEFAULT_CRITICAL_FILETYPES), show_default=True,
     help="Comma-separated file extensions for --critical-files.",
 )
+@click.option(
+    "--pdf-report/--no-pdf-report", default=False,
+    help="Also write report.pdf — the same findings as a printable/shareable PDF, in --report-lang. "
+    "Off by default; requires pip install 'metascout[pdf]'. An existing run can be turned into a PDF "
+    "later with `metascout pdf RUN_DIR`.",
+)
 def scan(
     targets: tuple[str, ...], targets_file: str | None, urls_file: str | None, filetypes: str, engines: str, ddgs_backend: str, max_docs: int,
     max_crawl_pages: int, max_crawl_depth: int, concurrency: int, timeout: int, max_download_mb: int,
@@ -192,7 +218,7 @@ def scan(
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
     scan_content: bool, content_categories: str, visual_signature: bool,
-    critical_files: bool, critical_file_types: str,
+    critical_files: bool, critical_file_types: str, pdf_report: bool,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -270,6 +296,10 @@ def scan(
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(render_html_report(findings, lang=report_lang))
         console.print(f"[green]HTML report:[/green] {html_path}")
+
+    if pdf_report:
+        _write_pdf_report(json.loads(render_json_report(findings)),
+                          os.path.join(cfg.output_dir, "report.pdf"), report_lang)
 
 
 @main.command("visual-signature-scan")
@@ -358,11 +388,12 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
 @click.option("--json-report/--no-json-report", default=True)
 @click.option("--html-report/--no-html-report", default=True)
 @click.option("--report-lang", type=click.Choice(["en", "tr"]), default="en", show_default=True)
+@click.option("--pdf-report/--no-pdf-report", default=False, help="Also write report.pdf (printable/shareable). Requires pip install 'metascout[pdf]'.")
 @click.option("--output-dir", default="./metascout_output", show_default=True, type=click.Path())
 def local_scan(
     directory: str, filetypes: str, scan_content: bool, content_categories: str,
     visual_signature: bool, critical_files: bool, critical_file_types: str,
-    json_report: bool, html_report: bool, report_lang: str, output_dir: str,
+    json_report: bool, html_report: bool, report_lang: str, pdf_report: bool, output_dir: str,
 ) -> None:
     """Analyze documents already sitting in DIRECTORY — no discovery, no
     download, just metadata extraction plus whichever optional checks you
@@ -410,6 +441,10 @@ def local_scan(
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(render_html_report(findings, lang=report_lang))
         console.print(f"[green]HTML report:[/green] {html_path}")
+
+    if pdf_report:
+        _write_pdf_report(json.loads(render_json_report(findings)),
+                          os.path.join(output_dir, "report.pdf"), report_lang)
 
 
 @main.command()
@@ -531,7 +566,7 @@ def api(host: str, port: int, output_dir: str, max_workers: int, max_pending: in
         from .api import create_app
     except ImportError:
         console.print("[bold red]Missing dependency.[/bold red] Install the API extra first:")
-        console.print("  pip install 'metascout[api]'")
+        console.print("  pip install 'metascout[api]'", markup=False)
         sys.exit(1)
 
     _print_banner()
@@ -539,6 +574,31 @@ def api(host: str, port: int, output_dir: str, max_workers: int, max_pending: in
     console.print("[dim]No built-in authentication — see the README before exposing this beyond a trusted machine/network.[/dim]\n")
     app = create_app(output_dir=output_dir, max_workers=max_workers, max_pending=max_pending)
     uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+@main.command("pdf")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Report language.")
+@click.option("--out", type=click.Path(), default=None, help="Where to write the PDF. Defaults to RUN_DIR/report.pdf.")
+def pdf(run_dir: str, lang: str, out: str | None) -> None:
+    """Build a PDF report from a past scan's output directory.
+
+    RUN_DIR is any directory holding a report.json — a `metascout scan` /
+    `local-scan` output directory, or one of the web UI's runs under
+    --output-dir. Nothing is re-scanned or re-downloaded: the PDF is built
+    from results that already exist, so old runs can be turned into a PDF
+    at any time, in either language.
+
+    Requires the optional [pdf] extra: pip install 'metascout[pdf]'.
+    """
+    report_path = os.path.join(run_dir, "report.json")
+    if not os.path.isfile(report_path):
+        raise click.UsageError(f"No report.json found in {run_dir!r} — point this at a scan's output directory.")
+    with open(report_path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+
+    if not _write_pdf_report(payload, out or os.path.join(run_dir, "report.pdf"), lang):
+        sys.exit(1)
 
 
 @main.command()

@@ -53,7 +53,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr,api]'
+RUN pip install --no-cache-dir '.[content-scan,visual-signature,ocr,api,pdf]'
 
 # Scan output (report.html/report.json/downloads/) lives here — mount a
 # volume at /data to get results back out onto the host and keep them
