@@ -53,6 +53,9 @@ class DocumentMetadata:
     error: str | None = None
     # See DownloadedDocument.archive_url.
     archive_url: str | None = None
+    # True when this document's metadata had been stripped with ExifTool and
+    # was recovered from the revision before that (see exiftool_wrapper).
+    metadata_stripped: bool = False
 
 
 @dataclass
@@ -136,6 +139,10 @@ class ScanFindings:
     @property
     def documents_from_archive(self) -> int:
         return sum(1 for d in self.documents if d.archive_url and not d.error)
+
+    @property
+    def documents_with_stripped_metadata(self) -> int:
+        return sum(1 for d in self.documents if d.metadata_stripped)
 
     @property
     def content_findings_by_category(self) -> dict[str, list[ContentFinding]]:

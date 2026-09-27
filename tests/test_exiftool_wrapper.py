@@ -1,4 +1,5 @@
 import zipfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from metascout.metadata import exiftool_wrapper as ew
@@ -116,3 +117,67 @@ def test_extract_metadata_keeps_the_archive_url_of_a_document(tmp_path):
         [meta] = ew.extract_metadata([doc])
 
     assert meta.archive_url == snapshot
+
+
+def _pdf_with_exiftool_update(path, size_prefix=b"%PDF-1.7\n" + b"x" * 100):
+    path.write_bytes(size_prefix + b"trailer<</Info 38 0 R>>\n%%EOF" + ew._EXIFTOOL_UPDATE_MARKER + b"\ntrailer<</Root 1 0 R>>\n%%EOF")
+
+
+def test_has_exiftool_update_detects_a_stripped_pdf(tmp_path):
+    stripped = tmp_path / "stripped.pdf"
+    _pdf_with_exiftool_update(stripped)
+    plain = tmp_path / "plain.pdf"
+    plain.write_bytes(b"%PDF-1.7\ntrailer<</Info 38 0 R>>\n%%EOF")
+
+    assert ew._has_exiftool_update(str(stripped)) is True
+    assert ew._has_exiftool_update(str(plain)) is False
+    assert ew._has_exiftool_update(str(tmp_path / "missing.pdf")) is False
+
+
+def test_extract_metadata_recovers_metadata_stripped_with_exiftool(tmp_path):
+    pdf = tmp_path / "cleaned.pdf"
+    _pdf_with_exiftool_update(pdf)
+    doc = DownloadedDocument(url="https://example.gov/a.pdf", local_path=str(pdf), filetype="pdf",
+                             source=DiscoverySource.MANUAL)
+    reverted = {}
+
+    def fake_batch(paths, timeout):
+        if paths == [str(pdf)]:  # the stripped file itself has nothing left
+            return [{"SourceFile": str(pdf), "PDF:PageCount": 5}]
+        return [{"SourceFile": paths[0], "PDF:PageCount": 5, "PDF:Author": "Jane Doe",
+                 "XMP-dc:Creator": "Jane Doe", "System:Directory": "/tmp/metascout-pdf-1"}]
+
+    def fake_run(cmd, **kwargs):
+        reverted["cmd"] = cmd
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    with patch.object(ew, "exiftool_available", return_value=True), \
+         patch.object(ew, "_run_exiftool_batch", side_effect=fake_batch), \
+         patch.object(ew.subprocess, "run", side_effect=fake_run):
+        [meta] = ew.extract_metadata([doc])
+
+    assert "-pdf-update:all=" in reverted["cmd"]
+    # the copy is reverted, never the downloaded evidence file
+    assert str(pdf) not in reverted["cmd"]
+    assert meta.metadata_stripped is True
+    assert meta.raw["PDF-previous:PDF:Author"] == "Jane Doe"
+    assert meta.raw["PDF-previous:XMP-dc:Creator"] == "Jane Doe"
+    # unchanged tags aren't duplicated, and the temp copy's own paths are dropped
+    assert "PDF-previous:PDF:PageCount" not in meta.raw
+    assert not any("System" in k for k in meta.raw)
+
+
+def test_extract_metadata_leaves_ordinary_pdfs_alone(tmp_path):
+    pdf = tmp_path / "plain.pdf"
+    pdf.write_bytes(b"%PDF-1.7\ntrailer<</Info 38 0 R>>\n%%EOF")
+    doc = DownloadedDocument(url="https://example.gov/a.pdf", local_path=str(pdf), filetype="pdf",
+                             source=DiscoverySource.MANUAL)
+
+    with patch.object(ew, "exiftool_available", return_value=True), \
+         patch.object(ew, "_run_exiftool_batch", return_value=[{"SourceFile": str(pdf), "PDF:Author": "jdoe"}]), \
+         patch.object(ew.subprocess, "run") as run:
+        [meta] = ew.extract_metadata([doc])
+
+    run.assert_not_called()
+    assert meta.metadata_stripped is False
+    assert meta.raw == {"PDF:Author": "jdoe"}

@@ -19,3 +19,18 @@ def test_json_report_records_where_an_archived_copy_came_from():
     by_url = {d["url"]: d for d in payload["documents"]}
     assert by_url["https://example.com/removed.pdf"]["archive_url"] == snapshot
     assert by_url["https://example.com/live.pdf"]["archive_url"] is None
+
+
+def test_json_report_flags_documents_whose_metadata_was_stripped():
+    docs = [
+        DocumentMetadata(url="https://example.gov/cleaned.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+                         raw={"PDF-previous:PDF:Author": "Jane Doe"}, metadata_stripped=True),
+        DocumentMetadata(url="https://example.gov/plain.pdf", local_path="/tmp/b.pdf", filetype="pdf",
+                         raw={"PDF:Author": "jdoe"}),
+    ]
+
+    payload = json.loads(render_json_report(analyze(docs, targets=["example.gov"])))
+
+    by_url = {d["url"]: d for d in payload["documents"]}
+    assert by_url["https://example.gov/cleaned.pdf"]["metadata_stripped"] is True
+    assert by_url["https://example.gov/plain.pdf"]["metadata_stripped"] is False

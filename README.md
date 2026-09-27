@@ -84,6 +84,12 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **GPS coordinates**, when a photo with location EXIF data (e.g. a phone
   photo pasted into a Word doc) is embedded in a document — a link to view
   it on a map is included in the report
+- **Metadata that was deliberately stripped.** ExifTool doesn't rewrite a PDF
+  to remove metadata: it appends an incremental update that stops pointing at
+  the old Info dictionary and XMP, leaving the original bytes in the file and
+  honouring its own deletion when reading. MetaScout undoes that update on a
+  throwaway copy (never the downloaded file) and reports what the document
+  said before the cleanup, tagged **stripped** in the report
 - **Classification / sensitivity labels** the authoring tool wrote into the
   file: Microsoft Purview (AIP) `MSIP_Label_*` properties, TITUS markings, or
   a plain `Classification` document property. A label that says "Confidential",

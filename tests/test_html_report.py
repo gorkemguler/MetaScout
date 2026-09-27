@@ -104,3 +104,16 @@ def test_html_report_shows_classification_labels_and_raises_risk(lang, heading):
     assert "Confidential - Internal" in html
     # a label saying "not public" is a high-risk finding on its own
     assert "badge-high" in html
+
+
+@pytest.mark.parametrize("lang,tag", [("en", "stripped"), ("tr", "temizlenmiş")])
+def test_html_report_marks_documents_whose_metadata_was_stripped(lang, tag):
+    doc = DocumentMetadata(
+        url="https://example.gov/cleaned.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={"PDF-previous:PDF:Author": "Jane Doe"}, metadata_stripped=True,
+    )
+    html = render_html_report(analyze([doc], targets=["example.gov"]), lang=lang)
+
+    assert 'class="stripped-badge"' in html
+    assert tag in html
+    assert "Jane Doe" in html  # recovered author still reported as a username

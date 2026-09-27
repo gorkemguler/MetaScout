@@ -79,7 +79,10 @@ _STRINGS = {
         "critical_files": "Critical / Sensitive Files",
         "documents": "Documents", "col_url": "URL", "col_type": "Type", "col_status": "Status",
         "status_ok": "ok", "status_error": "error",
-        "archive_tag": "ARCHIVE",
+        "archive_tag": "ARCHIVE", "stripped_tag": "STRIPPED",
+        "stripped_note": "{n} document(s) had their metadata stripped with ExifTool, which leaves the "
+                         "previous version of the file in place — so it was recovered, and they are tagged "
+                         "STRIPPED below. Their findings come from before the cleanup.",
         "archive_note": "{n} document(s) are no longer live on the site; the copy came from the Wayback "
                         "Machine archive and is tagged ARCHIVE below. Removed from the site, still public "
                         "through the archive.",
@@ -113,7 +116,10 @@ _STRINGS = {
         "critical_files": "Kritik / Hassas Dosyalar",
         "documents": "Belgeler", "col_url": "URL", "col_type": "Tür", "col_status": "Durum",
         "status_ok": "tamam", "status_error": "hata",
-        "archive_tag": "ARŞİV",
+        "archive_tag": "ARŞİV", "stripped_tag": "TEMİZLENMİŞ",
+        "stripped_note": "{n} belgenin metadata'sı ExifTool ile silinmiş; silme işlemi dosyanın önceki "
+                         "sürümünü yerinde bıraktığı için geri alındı ve aşağıda TEMİZLENMİŞ olarak "
+                         "işaretlendi. Bulguları, silinmeden önceki hâllerinden geliyor.",
         "archive_note": "{n} belge sitede artık yayında değil; kopya Wayback Machine arşivinden alındı ve "
                         "aşağıda ARŞİV etiketiyle işaretlendi. Siteden kaldırılmış olsalar da arşiv "
                         "üzerinden hâlâ herkese açıklar.",
@@ -280,12 +286,18 @@ def _documents_section(payload: dict, t: dict, st: dict, width: float) -> list:
     if archived:
         story.append(Paragraph(t["archive_note"].format(n=len(archived)), st["muted"]))
         story.append(Spacer(1, 4))
+    stripped = [d for d in docs if d.get("metadata_stripped")]
+    if stripped:
+        story.append(Paragraph(f"<font color='{_BAD}'>{t['stripped_note'].format(n=len(stripped))}</font>", st["body"]))
+        story.append(Spacer(1, 4))
 
     rows = [[t["col_url"], t["col_type"], t["col_status"]]]
     for d in docs[:_MAX_ROWS]:
         url = _esc(d.get("url"))
         if d.get("archive_url"):
             url += f" <font color='{_WARN}' size='6.5'>[{t['archive_tag']}]</font>"
+        if d.get("metadata_stripped"):
+            url += f" <font color='{_BAD}' size='6.5'>[{t['stripped_tag']}]</font>"
         if d.get("error"):
             status = f"<font color='{_BAD}'>{t['status_error']}: {_esc(d['error'])}</font>"
         else:

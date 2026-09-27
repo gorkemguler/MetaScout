@@ -26,6 +26,17 @@ _MAX_MEDIA_BYTES = 30 * 1024 * 1024
 # Groups describing the extracted temp copy of a picture, not the picture.
 _MEDIA_SKIP_GROUPS = {"System", "ExifTool"}
 
+# ExifTool doesn't rewrite a PDF to remove metadata: it appends an
+# incremental update whose trailer simply stops pointing at the old Info
+# dictionary and XMP. The original bytes are still in the file, and exiftool
+# honours its own deletion when reading, so a document "cleaned" this way
+# looks empty to any scan. Undoing that update on a throwaway copy brings
+# back what the document said before someone stripped it.
+_EXIFTOOL_UPDATE_MARKER = b"%BeginExifToolUpdate"
+# The update is appended, so the marker sits near the end of the file.
+_TAIL_SCAN_BYTES = 2 * 1024 * 1024
+_PREVIOUS_PREFIX = "PDF-previous"
+
 
 def exiftool_available() -> bool:
     return shutil.which("exiftool") is not None
@@ -120,6 +131,55 @@ def _embedded_media_metadata(doc: DownloadedDocument, per_file_timeout: int) -> 
     return merged
 
 
+def _has_exiftool_update(path: str) -> bool:
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            if size > _TAIL_SCAN_BYTES:
+                fh.seek(size - _TAIL_SCAN_BYTES)
+            return _EXIFTOOL_UPDATE_MARKER in fh.read()
+    except OSError:
+        return False
+
+
+def _recovered_pdf_metadata(doc: DownloadedDocument, current: dict, per_file_timeout: int) -> dict:
+    """Metadata of the revision before someone stripped it with ExifTool,
+    keyed "PDF-previous:<Group>:<Tag>". Empty when the file carries no such
+    update, or when undoing it fails — the scan then just reports what the
+    current revision has."""
+    if doc.filetype.lower() != "pdf" or not _has_exiftool_update(doc.local_path):
+        return {}
+
+    with tempfile.TemporaryDirectory(prefix="metascout-pdf-") as tmp:
+        copy_path = os.path.join(tmp, "previous.pdf")
+        try:
+            shutil.copyfile(doc.local_path, copy_path)
+        except OSError:
+            return {}
+        # Undo only ExifTool's own update, and only on our copy — the
+        # downloaded evidence file is never modified.
+        try:
+            proc = subprocess.run(
+                ["exiftool", "-pdf-update:all=", "-overwrite_original", copy_path],
+                capture_output=True, text=True, timeout=per_file_timeout,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return {}
+        if proc.returncode != 0:
+            return {}
+
+        recovered = {}
+        for record in _run_exiftool_batch([copy_path], per_file_timeout):
+            record.pop("SourceFile", None)
+            for key, value in record.items():
+                if split_tag_key(key)[0] in _MEDIA_SKIP_GROUPS:
+                    continue
+                if current.get(key) == value:  # unchanged by the stripping
+                    continue
+                recovered[f"{_PREVIOUS_PREFIX}:{key}"] = value
+        return recovered
+
+
 def extract_metadata(
     downloaded: list[DownloadedDocument],
     *,
@@ -151,10 +211,12 @@ def extract_metadata(
             if doc is None:
                 continue
             seen_paths.add(doc.local_path)
+            recovered = _recovered_pdf_metadata(doc, record, per_file_timeout)
+            record.update(recovered)
             record.update(_embedded_media_metadata(doc, per_file_timeout))
             results.append(DocumentMetadata(
                 url=doc.url, local_path=doc.local_path, filetype=doc.filetype,
-                raw=record, archive_url=doc.archive_url,
+                raw=record, archive_url=doc.archive_url, metadata_stripped=bool(recovered),
             ))
         for doc in batch:
             if doc.local_path not in seen_paths:

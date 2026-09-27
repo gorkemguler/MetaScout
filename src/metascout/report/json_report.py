@@ -28,6 +28,9 @@ def render_json_report(findings: ScanFindings) -> str:
                 # Non-null when the live URL no longer served the file and
                 # the copy came from this Wayback snapshot instead.
                 "archive_url": d.archive_url,
+                # True when the document's metadata had been stripped with
+                # ExifTool and was recovered from the previous revision.
+                "metadata_stripped": d.metadata_stripped,
                 "metadata": d.raw,
             }
             for d in findings.documents

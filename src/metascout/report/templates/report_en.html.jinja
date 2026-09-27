@@ -88,6 +88,12 @@
   .empty { color: var(--muted2); font-style: italic; padding: 16px 0; font-size: 13px; }
   .status-ok { color: var(--good); font-weight: 600; }
   .status-err { color: var(--bad); }
+  .stripped-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--bad); background: rgba(242,109,109,0.14);
+    border: 1px solid rgba(242,109,109,0.35); border-radius: 5px;
+    padding: 2px 6px; margin-left: 6px; white-space: nowrap;
+  }
   .archive-badge {
     display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .03em; color: var(--warn); background: rgba(242,166,90,0.14);
@@ -191,6 +197,12 @@
         {% else %}
           No direct username/email/server leaks were detected; findings are mostly
           software and operating system information.
+        {% endif %}
+        {% if findings.documents_with_stripped_metadata %}
+          <strong>{{ findings.documents_with_stripped_metadata }}</strong> document(s) had their metadata
+          stripped with ExifTool, which leaves the previous version of the file in place — so it was
+          <strong>recovered</strong>, and they are tagged <span class="stripped-badge">stripped</span> in the
+          list below. Their findings come from what the document said before the cleanup.
         {% endif %}
         {% if findings.documents_from_archive %}
           <strong>{{ findings.documents_from_archive }}</strong> of them are no longer live on the
@@ -460,6 +472,8 @@
             <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a>
               {%- if d.archive_url %}<a class="archive-badge" href="{{ d.archive_url }}" target="_blank" rel="noopener"
                 title="This document is no longer live on the site; the copy came from the Wayback Machine archive. The link opens the archived snapshot.">archive</a>{% endif %}
+              {%- if d.metadata_stripped %}<span class="stripped-badge"
+                title="This document's metadata was stripped with ExifTool; the old data is still in the file, so it was recovered. The findings come from before the cleanup.">stripped</span>{% endif %}
             </td>
             <td><span class="filetype-badge">{{ d.filetype }}</span></td>
             <td>

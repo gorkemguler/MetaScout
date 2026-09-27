@@ -85,6 +85,13 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **GPS koordinatları**, konum bilgisi içeren bir fotoğraf (ör. bir
   belgeye yapıştırılmış telefon fotoğrafı) belgeye gömülüyse — raporda
   haritada görüntüleme linki de sunulur
+- **Bilerek silinmiş metadata.** ExifTool bir PDF'in metadata'sını silerken
+  dosyayı yeniden yazmaz: sonuna, eski Info sözlüğüne ve XMP'ye artık işaret
+  etmeyen bir artımlı güncelleme ekler. Orijinal veri dosyada kalır, ama
+  exiftool okurken kendi silme işlemine uyar. MetaScout bu güncellemeyi
+  geçici bir kopyada geri alır (indirilen dosyaya dokunmadan) ve belgenin
+  temizlenmeden önce ne söylediğini raporlar; bu belgeler raporda
+  **temizlenmiş** rozetiyle işaretlenir
 - **Gizlilik / sınıflandırma etiketleri**: belgeyi üreten programın dosyaya
   yazdığı damgalar — Microsoft Purview (AIP) `MSIP_Label_*` özellikleri,
   TITUS işaretleri ya da düpedüz bir `Classification` belge özelliği.

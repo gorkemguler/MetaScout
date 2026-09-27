@@ -88,6 +88,12 @@
   .empty { color: var(--muted2); font-style: italic; padding: 16px 0; font-size: 13px; }
   .status-ok { color: var(--good); font-weight: 600; }
   .status-err { color: var(--bad); }
+  .stripped-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--bad); background: rgba(242,109,109,0.14);
+    border: 1px solid rgba(242,109,109,0.35); border-radius: 5px;
+    padding: 2px 6px; margin-left: 6px; white-space: nowrap;
+  }
   .archive-badge {
     display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .03em; color: var(--warn); background: rgba(242,166,90,0.14);
@@ -191,6 +197,12 @@
         {% else %}
           Doğrudan kullanıcı/e-posta/sunucu sızıntısı tespit edilmedi; bulgular çoğunlukla
           yazılım ve işletim sistemi bilgisinden oluşuyor.
+        {% endif %}
+        {% if findings.documents_with_stripped_metadata %}
+          <strong>{{ findings.documents_with_stripped_metadata }}</strong> belgenin metadata'sı
+          ExifTool ile silinmiş, ancak silme işlemi dosyanın önceki sürümünü yerinde bıraktığı için
+          <strong>geri alındı</strong> — aşağıdaki listede <span class="stripped-badge">temizlenmiş</span>
+          rozetiyle işaretli. Bu belgelerin bulguları, silinmeden önceki hâllerinden geliyor.
         {% endif %}
         {% if findings.documents_from_archive %}
           Bunlardan <strong>{{ findings.documents_from_archive }}</strong> tanesi sitede artık
@@ -462,6 +474,8 @@
             <td class="value"><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.url | truncate(90) }}</a>
               {%- if d.archive_url %}<a class="archive-badge" href="{{ d.archive_url }}" target="_blank" rel="noopener"
                 title="Bu belge sitede artık yayında değil; kopya Wayback Machine arşivinden alındı. Bağlantı arşivdeki kaydı açar.">arşiv</a>{% endif %}
+              {%- if d.metadata_stripped %}<span class="stripped-badge"
+                title="Bu belgenin metadata'sı ExifTool ile silinmiş; eski veri dosyada kaldığı için geri alındı. Bulgular silinmeden önceki hâlden.">temizlenmiş</span>{% endif %}
             </td>
             <td><span class="filetype-badge">{{ d.filetype }}</span></td>
             <td>

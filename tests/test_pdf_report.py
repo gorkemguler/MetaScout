@@ -169,3 +169,15 @@ def test_pdf_report_shows_classification_labels():
     assert "NATO RESTRICTED" in text
     assert "not meant to be public" in text
     assert "High Risk" in text
+
+
+def test_pdf_report_marks_documents_whose_metadata_was_stripped():
+    payload = _payload()
+    payload["documents"][0]["metadata_stripped"] = True
+
+    en = _text(render_pdf_report(payload, lang="en"))
+    tr = _text(render_pdf_report(payload, lang="tr"))
+
+    assert "STRIPPED" in en
+    assert "1 document(s) had their metadata stripped" in en
+    assert "TEMİZLENMİŞ" in tr

@@ -74,6 +74,12 @@ def _print_summary(findings) -> None:
         table.add_row(label, str(len(bucket)))
     console.print(table)
 
+    if findings.documents_with_stripped_metadata:
+        console.print(
+            f"[yellow]{findings.documents_with_stripped_metadata}[/yellow] document(s) had their metadata "
+            "stripped with ExifTool; it was recovered from the previous revision."
+        )
+
     if findings.documents_from_archive:
         console.print(
             f"[yellow]{findings.documents_from_archive}[/yellow] document(s) were no longer live on the "
