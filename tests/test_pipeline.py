@@ -439,3 +439,30 @@ def test_run_local_document_scan_extension_in_both_lists_counts_only_as_document
 
     assert len(findings.documents) == 1
     assert findings.critical_files == []
+
+
+def test_run_scan_ignores_files_that_are_public_by_design():
+    """robots.txt, security.txt, llms.txt, ads.txt... match the critical file
+    types, but being public is their purpose — not a finding."""
+    cfg = _cfg(manual_urls=["https://example.com/a.pdf"], critical_files=True, critical_file_types=["txt", "env"])
+    doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
+    critical_discovered = [
+        DiscoveredDocument(url=f"https://example.com/{name}", source=DiscoverySource.CRAWL, filetype="txt")
+        for name in ("robots.txt", ".well-known/security.txt", "llms.txt", "ads.txt", "app-ads.txt", "Humans.txt")
+    ] + [DiscoveredDocument(url="https://example.com/backup/.env", source=DiscoverySource.CRAWL, filetype="env"),
+         DiscoveredDocument(url="https://example.com/notes/passwords.txt", source=DiscoverySource.CRAWL, filetype="txt")]
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None):
+        return critical_discovered if filetypes == ["txt", "env"] else []
+
+    def fake_download_documents(documents, *, dest_dir, **kwargs):
+        return [DownloadedDocument(url=d.url, local_path="/tmp/x", filetype=d.filetype, source=d.source) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download_documents), \
+         patch("metascout.pipeline.extract_metadata", return_value=doc_metadata):
+        findings = run_scan(cfg)
+
+    assert sorted(f.url for f in findings.critical_files) == [
+        "https://example.com/backup/.env", "https://example.com/notes/passwords.txt"]

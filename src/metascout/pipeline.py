@@ -212,6 +212,19 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     return findings
 
 
+# Plaintext files every site publishes on purpose — crawler, security-contact,
+# ad-seller and AI-crawler conventions. They match the critical file types but
+# being public is their whole point, so they are never a finding.
+_PUBLIC_BY_DESIGN = {
+    "robots.txt", "security.txt", "humans.txt", "ads.txt", "app-ads.txt", "llms.txt", "llms-full.txt",
+    "dnt-policy.txt", "trust.txt", "sitemap.txt", "sitemap.xml",
+}
+
+
+def _public_by_design(url: str) -> bool:
+    return urlparse(url).path.rsplit("/", 1)[-1].lower() in _PUBLIC_BY_DESIGN
+
+
 def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn) -> list[DownloadedDocument]:
     """Second, independent discovery pass for plaintext/config-style
     "critical" files (see ScanConfig.critical_files / DEFAULT_CRITICAL_FILETYPES)
@@ -219,7 +232,8 @@ def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn) -> list[D
     filetype list, kept in its own downloads/ subfolder and report section.
     """
     log(f"discovering critical/sensitive files ({', '.join(cfg.critical_file_types)}) ...")
-    discovered = discover_all(cfg, log, filetypes=cfg.critical_file_types)
+    discovered = [d for d in discover_all(cfg, log, filetypes=cfg.critical_file_types)
+                  if not _public_by_design(d.url)]
     log(f"  found {len(discovered)} critical file candidate(s)")
     if not discovered:
         return []

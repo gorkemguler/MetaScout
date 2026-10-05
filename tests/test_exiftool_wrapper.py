@@ -1,3 +1,5 @@
+import base64
+import json
 import zipfile
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -181,3 +183,45 @@ def test_extract_metadata_leaves_ordinary_pdfs_alone(tmp_path):
     run.assert_not_called()
     assert meta.metadata_stripped is False
     assert meta.raw == {"PDF:Author": "jdoe"}
+
+
+def test_postscript_text_written_in_mac_roman_is_decoded(tmp_path):
+    """Illustrator on a Mac writes %%For in the Mac's legacy charset; exiftool's
+    JSON shows "?" for each Turkish letter. The raw value is fetched again and
+    decoded."""
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    doc = DownloadedDocument(url="https://example.com/a.pdf", local_path=str(pdf), filetype="pdf",
+                             source=DiscoverySource.CRAWL)
+    # ş/ı/İ only exist in Mac Turkish; ö/Ö are the same bytes in Mac Roman
+    mac_turkish = base64.b64encode("Işıl Öztürk".encode("mac_turkish")).decode()
+
+    def fake_run(cmd, **kwargs):
+        assert "-b" in cmd and "-PostScript:For" in cmd
+        return SimpleNamespace(returncode=0, stdout=json.dumps([{
+            "SourceFile": str(pdf), "PostScript:For": [f"base64:{mac_turkish}", ""],
+            "PostScript:Title": "brochure.ai"}]), stderr="")
+
+    with patch.object(ew, "exiftool_available", return_value=True), \
+         patch.object(ew, "_run_exiftool_batch", return_value=[{
+             "SourceFile": str(pdf), "PostScript:For": ["I?ıl ?zt?rk", ""], "PostScript:Title": "brochure.ai"}]), \
+         patch.object(ew.subprocess, "run", side_effect=fake_run):
+        [meta] = ew.extract_metadata([doc])
+
+    assert meta.raw["PostScript:For"] == ["Işıl Öztürk", ""]
+    assert meta.raw["PostScript:Title"] == "brochure.ai"
+
+
+def test_postscript_text_without_question_marks_is_left_alone(tmp_path):
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n")
+    doc = DownloadedDocument(url="https://example.com/a.pdf", local_path=str(pdf), filetype="pdf",
+                             source=DiscoverySource.CRAWL)
+
+    with patch.object(ew, "exiftool_available", return_value=True), \
+         patch.object(ew, "_run_exiftool_batch", return_value=[{"SourceFile": str(pdf), "PostScript:For": "mtn"}]), \
+         patch.object(ew.subprocess, "run") as run:
+        [meta] = ew.extract_metadata([doc])
+
+    run.assert_not_called()
+    assert meta.raw["PostScript:For"] == "mtn"

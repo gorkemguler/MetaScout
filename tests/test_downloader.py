@@ -237,3 +237,30 @@ def test_download_one_retries_a_503_then_falls_back_to_the_archive(tmp_path):
     assert result.error is None
     assert result.archive_url == snapshot
     assert session.get.call_count == 4  # 3 on the live URL, then the archive
+
+
+def test_download_one_rejects_an_html_page_served_for_a_text_file(tmp_path):
+    """A site that answers an unknown .txt/.env path with its own homepage
+    (a soft 404 under HTTP 200) must not yield a "critical file"."""
+    for filetype in ("txt", "env", "sql", "log"):
+        doc = DiscoveredDocument(url=f"https://example.com/ads.{filetype}", source=DiscoverySource.CRAWL,
+                                 filetype=filetype)
+        session = MagicMock()
+        session.get.return_value = _FakeResp(b'\n<!DOCTYPE html>\n<html lang="en-US"><head></head></html>')
+
+        result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+        assert result.error and "HTML page" in result.error, filetype
+
+
+def test_download_one_keeps_real_text_files(tmp_path):
+    for filetype, payload in [("txt", b"User-Agent: *\nDisallow: /admin"), ("env", b"DB_PASSWORD=secret"),
+                              ("sql", b"-- dump\nCREATE TABLE users (id int);")]:
+        doc = DiscoveredDocument(url=f"https://example.com/f.{filetype}", source=DiscoverySource.CRAWL,
+                                 filetype=filetype)
+        session = MagicMock()
+        session.get.return_value = _FakeResp(payload)
+
+        result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+        assert result.error is None, filetype

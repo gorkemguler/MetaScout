@@ -30,7 +30,12 @@ POSIX_PATH_RE = re.compile(
 # mkstemp-style scratch files ("/var/tmp/wv93Ri.tif") that Adobe apps record
 # in xmpMM:Manifest for every temporary rendition — dozens per PDF, random
 # names, nothing about the target in them.
-SCRATCH_FILE_RE = re.compile(r"/(?:private/)?var/tmp/[A-Za-z0-9]{6}(?:\.\w+)?")
+SCRATCH_FILE_RE = re.compile(
+    r"/(?:private/)?var/tmp/[A-Za-z0-9]{6}(?:\.\w+)?"
+    # macOS per-user temp dirs ("/var/folders/k2/q9x8…/T/TemporaryItems/…"),
+    # where Illustrator/InDesign stage renditions: random names, no account.
+    r"|/(?:private/)?var/folders/.+"
+)
 USER_HOME_RE = re.compile(
     r"(?:(?<![A-Za-z0-9])[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]|"
     + _POSIX_START

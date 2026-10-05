@@ -275,3 +275,18 @@ def test_analyze_public_labels_are_not_treated_as_restricted():
 
     assert set(findings.classification_labels) == {"Public", "Genel"}
     assert findings.restricted_classification_labels == []
+
+
+def test_analyze_skips_macos_per_user_temp_paths():
+    doc = DocumentMetadata(
+        url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf",
+        raw={"XMP-xmpMM:ManifestReferenceFilePath": [
+            "/var/folders/k2/q9x8w7v6u5t4s3r2p1n0m0000gn/T/TemporaryItems/NSIRD_Illustrator_Ab12Cd/Artboard 1.png",
+            "/private/var/folders/xy/abc123/T/TemporaryItems/render.tif",
+            "/Users/designer/Desktop/Brochure/cover.png",
+        ]},
+    )
+
+    findings = analyze([doc], targets=["example.com"])
+
+    assert set(findings.internal_paths) == {"/Users/designer/Desktop/Brochure/cover.png"}

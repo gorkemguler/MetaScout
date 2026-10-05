@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -131,6 +132,50 @@ def _embedded_media_metadata(doc: DownloadedDocument, per_file_timeout: int) -> 
     return merged
 
 
+# PostScript DSC comments (%%For, %%Title, %%Creator) are raw bytes in the
+# authoring Mac's legacy charset. exiftool's JSON can't carry bytes that aren't
+# UTF-8 and prints "?" for each non-ASCII letter ("I?ıl ?zt?rk" for "Işıl Öztürk"),
+# which mangles the very account names these fields are read for. Asking again
+# with -b makes exiftool hand such values over base64-encoded.
+#
+# Mac Turkish is tried before Mac OS Roman: the two agree on every accented
+# Latin letter except six bytes, which Mac Turkish maps to Ğ ğ İ ı Ş ş and Mac
+# Roman to symbols (⁄ € ‹ › ﬁ ﬂ) that don't occur in names. Mac Roman remains
+# the fallback for the one byte Mac Turkish leaves undefined.
+_POSTSCRIPT_TEXT_TAGS = ("For", "Title", "Creator")
+
+
+def _decode_raw(value: str) -> str:
+    if not value.startswith("base64:"):
+        return value
+    raw = base64.b64decode(value[7:])
+    for codec in ("utf-8", "mac_turkish"):
+        try:
+            return raw.decode(codec)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("mac_roman")
+
+
+def _repair_postscript_text(path: str, record: dict, timeout: int) -> None:
+    broken = [k for k, v in record.items()
+              if split_tag_key(k) in {("PostScript", t) for t in _POSTSCRIPT_TEXT_TAGS} and "?" in json.dumps(v)]
+    if not broken:
+        return
+    cmd = ["exiftool", "-j", "-b", "-a", "-G3:1", "-ee", *(f"-PostScript:{t}" for t in _POSTSCRIPT_TEXT_TAGS), path]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        raw = json.loads(proc.stdout)[0] if proc.stdout else {}
+    except (subprocess.TimeoutExpired, OSError, ValueError, IndexError):
+        return
+    for key in broken:
+        value = raw.get(key)
+        if isinstance(value, list):
+            record[key] = [_decode_raw(v) if isinstance(v, str) else v for v in value]
+        elif isinstance(value, str):
+            record[key] = _decode_raw(value)
+
+
 def _has_exiftool_update(path: str) -> bool:
     try:
         size = os.path.getsize(path)
@@ -211,6 +256,7 @@ def extract_metadata(
             if doc is None:
                 continue
             seen_paths.add(doc.local_path)
+            _repair_postscript_text(doc.local_path, record, per_file_timeout)
             recovered = _recovered_pdf_metadata(doc, record, per_file_timeout)
             record.update(recovered)
             record.update(_embedded_media_metadata(doc, per_file_timeout))

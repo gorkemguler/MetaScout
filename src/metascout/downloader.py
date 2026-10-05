@@ -29,6 +29,10 @@ _MAGIC_PREFIX = {
 # The PDF spec allows junk before %PDF (and real-world files use it), so this
 # one is searched for near the start instead of anchored to byte 0.
 _MAGIC_ANYWHERE = {"pdf": b"%PDF"}
+# Plaintext/config types have no signature, but a site that answers an
+# unknown .txt/.env/... path with its own HTML page (a soft 404 under HTTP 200)
+# is easy to tell apart: none of these files is ever an HTML document.
+_NEVER_HTML = {"txt", "log", "conf", "cfg", "ini", "env", "yml", "yaml", "sql", "bak", "csv", "json", "xml"}
 _HEAD_BYTES = 1024
 # A busy or rate-limiting host drops connections for a moment and then serves
 # the file fine, so a transient failure is worth one short retry before the
@@ -60,11 +64,19 @@ def _describe_head(head: bytes) -> str:
     return "unexpected content"
 
 
+def _is_html(head: bytes) -> bool:
+    lowered = head.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return lowered.startswith((b"<!doctype html", b"<html", b"<head", b"<body"))
+
+
 def _check_looks_like(filetype: str, head: bytes) -> None:
     """Raises NotTheDocument when `head` can't be the start of `filetype`.
-    Types with no known signature (.txt/.log/.env/... and manually supplied
-    URLs without an extension) are left alone."""
+    Binary document types are checked against their signature; plaintext and
+    config types only against being an HTML page; manually supplied URLs
+    without an extension are left alone."""
     filetype = (filetype or "").lower()
+    if filetype in _NEVER_HTML and _is_html(head):
+        raise NotTheDocument(f"server returned {_describe_head(head)}, not a {filetype} file")
     prefixes = _MAGIC_PREFIX.get(filetype)
     if prefixes and not head.startswith(prefixes):
         raise NotTheDocument(f"server returned {_describe_head(head)}, not a {filetype} file")
