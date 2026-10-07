@@ -26,18 +26,31 @@ def test_visual_signature_scan_fails_clearly_when_dependency_missing(tmp_path):
     _write_report(tmp_path, [{"url": "https://example.com/a.pdf", "filetype": "pdf", "local_path": str(local_pdf), "error": None}])
 
     runner = CliRunner()
-    with patch("metascout.content_scan.missing_dependencies", return_value=["signature-detect (...)"]):
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", False):
         result = runner.invoke(main, ["visual-signature-scan", str(tmp_path)])
 
     assert result.exit_code != 0
     assert "not installed" in result.output
 
 
+def test_visual_signature_scan_does_not_need_ocr_or_pypdf(tmp_path):
+    _write_report(tmp_path, [{"url": "https://example.com/missing.pdf", "filetype": "pdf", "local_path": "", "error": None}])
+
+    runner = CliRunner()
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", True), \
+            patch("metascout.content_scan.OCR_AVAILABLE", False), \
+            patch("metascout.content_scan.PYPDF_AVAILABLE", False):
+        result = runner.invoke(main, ["visual-signature-scan", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "not installed" not in result.output
+
+
 def test_visual_signature_scan_skips_documents_with_no_local_file(tmp_path):
     _write_report(tmp_path, [{"url": "https://example.com/missing.pdf", "filetype": "pdf", "local_path": "", "error": None}])
 
     runner = CliRunner()
-    with patch("metascout.content_scan.missing_dependencies", return_value=[]):
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", True):
         result = runner.invoke(main, ["visual-signature-scan", str(tmp_path)])
 
     assert result.exit_code == 0
@@ -51,7 +64,7 @@ def test_visual_signature_scan_writes_results_json(tmp_path):
 
     fake_hit = ContentFinding(document_url="https://example.com/a.pdf", category="signature", masked_value="visual: ...")
     runner = CliRunner()
-    with patch("metascout.content_scan.missing_dependencies", return_value=[]), \
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", True), \
             patch("metascout.pipeline.scan_visual_signatures", return_value=[fake_hit]):
         result = runner.invoke(main, ["visual-signature-scan", str(tmp_path)])
 

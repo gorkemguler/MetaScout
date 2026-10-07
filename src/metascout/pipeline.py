@@ -5,7 +5,9 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .config import ScanConfig
-from .content_scan import detect_visual_signature, missing_dependencies, scan_document
+from .content_scan import (
+    detect_visual_signature, missing_dependencies, missing_visual_signature_dependencies, scan_document,
+)
 from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
@@ -296,7 +298,7 @@ def scan_visual_signatures(doc_metadata, log: LogFn = _noop_log) -> list[Content
     prior scan — this check alone can take on the order of a minute per
     document, so most users won't want it slowing down every scan).
     """
-    missing = missing_dependencies(set(), visual_signature=True)
+    missing = missing_visual_signature_dependencies()
     if missing:
         log(
             "! visual signature scan: missing optional dependencies (" + ", ".join(missing) + "). "

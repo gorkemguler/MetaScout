@@ -18,26 +18,31 @@ ALL_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_dob", "signa
 _CONTEXT_RADIUS = 30
 
 
-def missing_dependencies(categories: set[str], *, visual_signature: bool = False) -> list[str]:
-    """Optional dependencies not installed that would improve coverage for
-    the requested categories — used to log one clear warning instead of
-    silently under-reporting."""
+def missing_dependencies(categories: set[str]) -> list[str]:
+    """Optional dependencies not installed that would improve content-scan
+    coverage for the requested categories — used to log one clear warning
+    instead of silently under-reporting."""
     missing = []
     if not PYPDF_AVAILABLE:
         missing.append("pypdf (PDF text extraction + PDF digital-signature check)")
     if "email_phone" in categories and not PHONENUMBERS_AVAILABLE:
         missing.append("phonenumbers (phone number detection)")
-    if visual_signature and not SIGNATURE_DETECT_AVAILABLE:
-        missing.append(
-            "signature-detect (visual signature detection — also needs ImageMagick "
-            "and Ghostscript installed system-wide, not just the pip package)"
-        )
     if not OCR_AVAILABLE:
         missing.append(
             "pytesseract/Wand (OCR fallback for scanned/image-only PDF pages — optional, "
             "also needs Tesseract, ImageMagick, and Ghostscript installed system-wide)"
         )
     return missing
+
+
+def missing_visual_signature_dependencies() -> list[str]:
+    """What the visual signature check itself needs to run. Separate from
+    missing_dependencies(): pypdf and OCR only widen content scanning, so
+    their absence must not switch this check off."""
+    if SIGNATURE_DETECT_AVAILABLE:
+        return []
+    return ["signature-detect (visual signature detection — also needs ImageMagick "
+            "and Ghostscript installed system-wide, not just the pip package)"]
 
 
 def _context(text: str, start: int, end: int, masked: str) -> str:
@@ -113,7 +118,7 @@ def scan_document(local_path: str, filetype: str, *, categories: set[str]) -> li
 
 
 __all__ = [
-    "scan_document", "missing_dependencies", "ALL_CATEGORIES",
+    "scan_document", "missing_dependencies", "missing_visual_signature_dependencies", "ALL_CATEGORIES",
     "PYPDF_AVAILABLE", "PHONENUMBERS_AVAILABLE",
     "SIGNATURE_DETECT_AVAILABLE", "detect_visual_signature",
 ]

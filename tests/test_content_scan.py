@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from metascout.content_scan import missing_dependencies, scan_document
+from metascout.content_scan import missing_dependencies, missing_visual_signature_dependencies, scan_document
 from metascout.content_scan import pii_patterns as pii
 from metascout.content_scan import signature as sig
 from metascout.content_scan import text_extract as te
@@ -558,3 +558,21 @@ def test_missing_dependencies_no_ocr_entry_when_available():
             patch("metascout.content_scan.OCR_AVAILABLE", True):
         missing = missing_dependencies({"tc_kimlik"})
     assert missing == []
+
+
+def test_visual_signature_needs_only_signature_detect():
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", True), \
+            patch("metascout.content_scan.PYPDF_AVAILABLE", False), \
+            patch("metascout.content_scan.OCR_AVAILABLE", False):
+        assert missing_visual_signature_dependencies() == []
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", False):
+        [missing] = missing_visual_signature_dependencies()
+    assert "signature-detect" in missing
+
+
+def test_content_scan_dependencies_do_not_mention_signature_detect():
+    with patch("metascout.content_scan.SIGNATURE_DETECT_AVAILABLE", False), \
+            patch("metascout.content_scan.PYPDF_AVAILABLE", True), \
+            patch("metascout.content_scan.PHONENUMBERS_AVAILABLE", True), \
+            patch("metascout.content_scan.OCR_AVAILABLE", True):
+        assert missing_dependencies({"signature"}) == []

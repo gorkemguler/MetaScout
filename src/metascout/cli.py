@@ -331,7 +331,7 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
     Requires: `pip install 'metascout[visual-signature]'` plus ImageMagick
     and Ghostscript installed system-wide (not just the pip package).
     """
-    from .content_scan import missing_dependencies
+    from .content_scan import missing_visual_signature_dependencies
     from .models import DocumentMetadata
     from .pipeline import scan_visual_signatures
 
@@ -352,7 +352,7 @@ def visual_signature_scan(report_dir: str, json_out: str | None) -> None:
     console.print("[bold yellow]EXPERIMENTAL:[/bold yellow] heuristic image analysis with a real false-positive rate — verify every hit manually.")
     console.print("[dim]This can take from under a second to well over a minute PER document.[/dim]\n")
 
-    if missing_dependencies(set(), visual_signature=True):
+    if missing_visual_signature_dependencies():
         console.print(
             "[bold red]signature-detect is not installed[/bold red] — run "
             "[bold]pip install 'metascout[visual-signature]'[/bold] (plus ImageMagick and Ghostscript) first."
