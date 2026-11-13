@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Literal
 
-from ..models import ScanFindings
-from ..report import render_html_report, render_json_report
+from .models import ScanFindings
+from .report import render_html_report, render_json_report
 
 JobKind = Literal["scan", "local-scan"]
 JobStatusName = Literal["queued", "running", "done", "error"]
@@ -17,7 +17,7 @@ JobStatusName = Literal["queued", "running", "done", "error"]
 
 class JobQueueFull(RuntimeError):
     """Raised by JobStore.submit() when max_pending jobs are already queued
-    or running. There's no built-in authentication on this service (see
+    or running. There's no built-in authentication on the REST API (see
     api/app.py), so without this cap an unauthenticated caller could submit
     an unbounded number of scan jobs in a loop and grow the in-memory job
     registry (and the executor's own internal work queue) without limit —
@@ -58,7 +58,11 @@ class Job:
 
 class JobStore:
     """In-memory job registry backed by a bounded thread pool that actually
-    runs each scan in the background, so `POST /v1/scans` can return
+    runs each scan in the background. Shared by the REST API (`metascout
+    api`) and the MCP server (`metascout mcp`), which is why it lives outside
+    the api package: importing it must not require FastAPI.
+
+    Background jobs are what let `POST /v1/scans` return
     immediately (job_id + status=queued) instead of blocking for the scan's
     full duration — unlike the local, single-user web UI (see web.py, whose
     POST /scan blocks synchronously), this is meant to be called by another
@@ -77,8 +81,12 @@ class JobStore:
 
     _LOG_LIMIT = 1000  # log lines kept per job before the oldest are dropped
 
-    def __init__(self, *, output_dir: str, max_workers: int = 2, max_jobs_kept: int = 200, max_pending: int = 50) -> None:
+    def __init__(self, *, output_dir: str, max_workers: int = 2, max_jobs_kept: int = 200, max_pending: int = 50,
+                 run_prefix: str = "api") -> None:
         self.output_dir = output_dir
+        # Leading part of every run directory name, so runs started through
+        # different front ends ("api-...", "mcp-...") stay tellable apart.
+        self._run_prefix = run_prefix
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="metascout-job")
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
@@ -94,7 +102,7 @@ class JobStore:
                     "wait for some to finish, or raise --max-pending, before submitting more."
                 )
             job_id = uuid.uuid4().hex[:12]
-            run_id = f"api-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{job_id[:8]}"
+            run_id = f"{self._run_prefix}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{job_id[:8]}"
             job = Job(job_id=job_id, kind=kind, run_id=run_id, output_dir=self.output_dir, report_lang=report_lang, targets=targets)
             self._jobs[job_id] = job
             self._evict_finished_past_cap_locked()

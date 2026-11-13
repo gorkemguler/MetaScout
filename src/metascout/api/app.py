@@ -11,10 +11,10 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from .. import __version__
 from ..config import ScanConfig, default_engines, hosts_of
+from ..jobs import Job, JobQueueFull, JobStore
 from ..models import ScanFindings
 from ..pipeline import run_local_document_scan, run_scan
 from ..report import PdfDependencyMissing, render_pdf_report
-from .jobs import Job, JobQueueFull, JobStore
 from .schemas import HealthResponse, JobCreated, JobLogResponse, JobStatusResponse, JobSummary, LocalScanRequest, ScanRequest
 
 

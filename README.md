@@ -39,6 +39,7 @@
 - [Scanning a manual URL list](#scanning-a-manual-url-list)
 - [Web UI](#web-ui)
 - [REST API](#rest-api-optional)
+- [MCP server](#mcp-server-optional)
 - [Docker](#docker)
 - [Wayback Machine discovery](#wayback-machine-discovery)
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
@@ -109,6 +110,9 @@ inside DOCX/XLSX/PPTX/ODF files, each with its own EXIF/XMP.
   in a single run and get one merged report
 - **CLI and local web UI**: `metascout scan` from the terminal, or `metascout
   web` for a browser form
+- **MCP server for AI assistants**: `metascout mcp` lets Claude or any other
+  MCP client start scans and read the findings (see
+  [MCP server](#mcp-server-optional))
 - **Passive subdomain enumeration** via [crt.sh](https://crt.sh) (Certificate
   Transparency logs), no API key required, each subdomain gets scanned too
 - **Respects `robots.txt` by default** and sends an honest, non-spoofed User-Agent
@@ -542,6 +546,83 @@ containing a `.env` with a fake AWS key over HTTP, polled `GET
 /v1/scans/{job_id}` to `"done"`, and confirmed the key came back correctly
 masked in `report.json` — plus `report.html`, the zip download, and the
 Swagger UI at `/docs` all checked in a real browser.
+
+## MCP server (optional)
+
+`metascout mcp` lets an AI assistant run MetaScout for you over the
+[Model Context Protocol](https://modelcontextprotocol.io). Ask Claude, or any
+other MCP client, "what do the documents on example.com leak?" and it starts
+the scan, waits for it and reads the findings back — or checks a single PDF,
+or a folder of documents you are about to publish.
+
+```bash
+pip install 'metascout[mcp]'
+```
+
+Add it to a client. Claude Code:
+
+```bash
+claude mcp add metascout -- metascout mcp
+```
+
+Claude Desktop, Cursor and other clients with an `mcpServers` config:
+
+```json
+{
+  "mcpServers": {
+    "metascout": {
+      "command": "metascout",
+      "args": ["mcp"],
+      "env": { "SERPER_API_KEY": "optional" }
+    }
+  }
+}
+```
+
+If the client can't find `metascout`, give the full path (`which metascout`).
+The client starts the command from a directory of its own, so a `.env` of
+yours is not picked up there: search engine keys go in `env` as above. Scans
+are saved under `~/metascout_output`; change that with `--output-dir`, and
+point it at the directory `metascout scan` or `metascout web` write to if the
+assistant should be able to read those runs too.
+
+| Tool | What it does |
+|---|---|
+| `start_scan` | Starts a scan of one or more domains in the background and returns a run id |
+| `scan_status` | Status and progress log; once done, result counts and the report paths. Can wait up to 50 s for the scan to finish |
+| `inspect_document` | Downloads one document and reports what its metadata leaks, in a single call |
+| `scan_local_directory` | Analyses documents in a local directory — only offered with `--allow-dir` |
+| `list_scans` | Scans running now and every finished run in the output directory |
+| `get_findings` | A scan's overview, or one category's values, paged and searchable |
+| `list_documents` | The documents a scan found: all, failed, from the Wayback Machine, or with stripped metadata |
+| `get_document` | One document's findings and the raw metadata tags behind them |
+| `compare_scans` | What appeared or disappeared between two scans |
+
+There is also a prompt, `assess_metadata_exposure`, that walks the assistant
+through a full assessment of one domain.
+
+Worth knowing:
+
+- **Results are paged and clipped.** A `report.json` runs to megabytes, so no
+  tool returns it whole. `scan_status` gives the paths of the full HTML and
+  JSON reports.
+- **Local files are off by default.** The assistant can read documents on
+  your machine only inside directories you name:
+  `metascout mcp --allow-dir ~/to-publish` (repeatable).
+- **Metadata is untrusted text.** Author names, titles and comments were
+  written by whoever made the document. The server tells the model to treat
+  them as data, not instructions; keep it in mind before wiring this into an
+  agent that can act on its own.
+- **Fewer switches than the CLI.** `--ignore-robots` and the experimental
+  visual signature check are not offered: an assistant should not be the one
+  deciding to ignore `robots.txt`.
+- `metascout mcp --transport http` serves Streamable HTTP on
+  `http://127.0.0.1:8770/mcp` for clients that connect to a URL. No built-in
+  authentication — the same posture as `metascout api`.
+
+Tested end to end with the official MCP client over both transports: a
+crawl of a local test site, a single-document inspection and a local
+directory scan.
 
 ## Docker
 
@@ -1032,6 +1113,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 metascout scan --help
 metascout web --help
 metascout api --help
+metascout mcp --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
@@ -1087,6 +1169,16 @@ metascout update --help
 | `--output-dir` | `./metascout_output` | Where each job's report/downloads get saved |
 | `--max-workers` | `2` | Maximum scans running at the same time |
 | `--max-pending` | `50` | Maximum scans queued or running at once; `POST /v1/scans` returns `429` past this — bounds memory use against an unauthenticated caller submitting jobs in a loop |
+
+`metascout mcp` options — see [MCP server](#mcp-server-optional) above:
+
+| Option | Default | Description |
+|---|---|---|
+| `--output-dir` | `~/metascout_output` | Where scans are saved and read back from |
+| `--transport` | `stdio` | `stdio`, or `http` for Streamable HTTP |
+| `--host` / `--port` | `127.0.0.1` / `8770` | Only with `--transport http` |
+| `--allow-dir` | none | A local directory the assistant may scan (repeatable) |
+| `--max-workers` | `2` | Maximum scans running at the same time |
 
 `metascout local-scan DIRECTORY` — analyzes documents already sitting in
 `DIRECTORY` (searched recursively): no discovery, no download, just
@@ -1177,11 +1269,12 @@ src/metascout/
 ├── diff.py                  compares two report.json payloads (new/removed docs, findings, content hits)
 ├── api/                      opt-in REST API service (`metascout api`), separate from web.py
 │   ├── app.py               FastAPI app + routes (job-based: POST starts, GET polls/fetches)
-│   ├── jobs.py               in-memory job registry + background thread pool that runs the pipeline
 │   └── schemas.py            Pydantic request/response models (also drives the auto-generated /docs)
-├── pipeline.py              discover → download → extract → analyze flow (shared by CLI, web, and api)
+├── jobs.py                  in-memory job registry + background thread pool, shared by api and mcp
+├── mcp_server.py            opt-in MCP server (`metascout mcp`): scan tools for AI assistants
+├── pipeline.py              discover → download → extract → analyze flow (shared by CLI, web, api and mcp)
 ├── updater.py               `metascout update`: latest GitHub release → git fast-forward / pip upgrade
-├── cli.py                   click-based `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` / `update` commands
+├── cli.py                   click-based `scan` / `web` / `api` / `mcp` / `local-scan` / `visual-signature-scan` / `diff` / `update` commands
 └── web.py                   Flask-based local web UI
 ```
 

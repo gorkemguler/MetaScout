@@ -583,6 +583,33 @@ def api(host: str, port: int, output_dir: str, max_workers: int, max_pending: in
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
 
+@main.command("mcp")
+@click.option("--output-dir", default="~/metascout_output", show_default=True, type=click.Path(), help="Where scans are saved and read back from. An MCP client starts this command from a directory of its own choosing, hence a fixed default; point it at the directory `metascout scan` or `metascout web` write to and their runs become readable too.")
+@click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio", show_default=True, help="stdio for a client that launches this command itself (Claude Desktop, Claude Code, IDEs); http to serve Streamable HTTP on --host/--port.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Only with --transport http.")
+@click.option("--port", default=8770, show_default=True, help="Only with --transport http.")
+@click.option("--allow-dir", "allow_dirs", multiple=True, type=click.Path(exists=True, file_okay=False), help="Let the assistant scan documents in this local directory (repeatable). Without it no local file can be read.")
+@click.option("--max-workers", default=2, show_default=True, help="Scans running at the same time; further ones wait in a queue.")
+def mcp_server(output_dir: str, transport: str, host: str, port: int, allow_dirs: tuple[str, ...], max_workers: int) -> None:
+    """Run MetaScout as an MCP server, so an AI assistant can start scans
+    and read their results: start a scan, follow it, page through the
+    findings, look into single documents, compare two runs.
+
+    Requires the optional [mcp] extra: pip install 'metascout[mcp]'.
+    """
+    try:
+        from .mcp_server import serve
+    except ImportError:
+        click.echo("Missing dependency. Install the MCP extra first:\n  pip install 'metascout[mcp]'", err=True)
+        sys.exit(1)
+
+    # On stdio the protocol owns stdout, so anything for a human goes to stderr.
+    if transport == "http":
+        click.echo(f"MetaScout MCP server on http://{host}:{port}/mcp", err=True)
+        click.echo("No built-in authentication — keep it on a trusted machine or network.", err=True)
+    serve(output_dir=output_dir, allow_dirs=allow_dirs, max_workers=max_workers, transport=transport, host=host, port=port)
+
+
 @main.command("pdf")
 @click.argument("run_dir", type=click.Path(exists=True, file_okay=False))
 @click.option("--lang", type=click.Choice(["en", "tr"]), default="en", show_default=True, help="Report language.")

@@ -39,6 +39,7 @@
 - [Manuel URL listesiyle tarama](#manuel-url-listesiyle-tarama)
 - [Web arayüzü](#web-arayüzü)
 - [REST API](#rest-api-opsiyonel)
+- [MCP sunucusu](#mcp-sunucusu-opsiyonel)
 - [Docker](#docker)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
@@ -113,6 +114,9 @@ bilgisiyle.
   tarayıp tek bir raporda birleştirir
 - **Hem CLI hem yerel web arayüzü**: `metascout scan` ile terminalden, `metascout
   web` ile tarayıcıdan form doldurarak
+- **Yapay zekâ asistanları için MCP sunucusu**: `metascout mcp` ile Claude ya da
+  başka bir MCP istemcisi tarama başlatıp bulguları okuyabilir (bkz.
+  [MCP sunucusu](#mcp-sunucusu-opsiyonel))
 - **Pasif subdomain keşfi**: [crt.sh](https://crt.sh) (Certificate Transparency
   logları) üzerinden API anahtarı gerektirmeden subdomain bulur, her birini de tarar
 - **`robots.txt`'e saygılı** varsayılan davranış, dürüst bir User-Agent gönderir
@@ -554,6 +558,84 @@ local-scan job'ı `POST`ladım, `GET /v1/scans/{job_id}`'yi `"done"`'a kadar
 sorguladım, ve anahtarın `report.json`'da doğru şekilde maskelenmiş
 geldiğini doğruladım — artı `report.html`, zip indirme, ve `/docs`'taki
 Swagger UI'ın hepsi gerçek bir tarayıcıda kontrol edildi.
+
+## MCP sunucusu (opsiyonel)
+
+`metascout mcp`, bir yapay zekâ asistanının MetaScout'u sizin yerinize
+[Model Context Protocol](https://modelcontextprotocol.io) üzerinden
+çalıştırmasını sağlar. Claude'a ya da başka bir MCP istemcisine "example.com'daki
+belgeler ne sızdırıyor?" diye sorun: taramayı başlatır, bitmesini bekler ve
+bulguları okur — ya da tek bir PDF'i, ya da yayımlamak üzere olduğunuz bir
+belge klasörünü kontrol eder.
+
+```bash
+pip install 'metascout[mcp]'
+```
+
+İstemciye ekleyin. Claude Code:
+
+```bash
+claude mcp add metascout -- metascout mcp
+```
+
+Claude Desktop, Cursor ve `mcpServers` ayarı kullanan diğer istemciler:
+
+```json
+{
+  "mcpServers": {
+    "metascout": {
+      "command": "metascout",
+      "args": ["mcp"],
+      "env": { "SERPER_API_KEY": "opsiyonel" }
+    }
+  }
+}
+```
+
+İstemci `metascout` komutunu bulamazsa tam yolunu verin (`which metascout`).
+İstemci komutu kendi seçtiği bir dizinden başlatır, bu yüzden sizin
+`.env` dosyanız orada okunmaz: arama motoru anahtarları yukarıdaki gibi
+`env` içine yazılır. Taramalar `~/metascout_output` altına kaydedilir;
+`--output-dir` ile değiştirilir. Asistanın `metascout scan` ya da
+`metascout web` ile yapılmış taramaları da okuyabilmesi için aynı dizini
+gösterin.
+
+| Araç | Ne yapar |
+|---|---|
+| `start_scan` | Bir ya da birden çok domain için arka planda tarama başlatır, bir run id döner |
+| `scan_status` | Durum ve ilerleme kaydı; bitince sonuç sayıları ve rapor yolları. Taramanın bitmesini 50 saniyeye kadar bekleyebilir |
+| `inspect_document` | Tek bir belgeyi indirir ve metadata'sının ne sızdırdığını tek çağrıda verir |
+| `scan_local_directory` | Yerel bir dizindeki belgeleri analiz eder — yalnızca `--allow-dir` verilince sunulur |
+| `list_scans` | Şu an çalışan taramalar ve çıktı dizinindeki bitmiş tüm taramalar |
+| `get_findings` | Bir taramanın özeti, ya da tek bir kategorinin değerleri: sayfalı ve aranabilir |
+| `list_documents` | Taramanın bulduğu belgeler: tümü, indirilemeyenler, Wayback Machine'den gelenler, metadata'sı silinmiş olanlar |
+| `get_document` | Tek bir belgenin bulguları ve arkasındaki ham metadata etiketleri |
+| `compare_scans` | İki tarama arasında ne eklendi, ne kayboldu |
+
+Ayrıca asistanı bir domainin tam değerlendirmesinden adım adım geçiren
+`assess_metadata_exposure` adlı hazır bir prompt var.
+
+Bilmeye değer:
+
+- **Sonuçlar sayfalı ve kırpılmış gelir.** Bir `report.json` megabaytlarca
+  olabilir; hiçbir araç onu bütün olarak döndürmez. Tam HTML ve JSON
+  raporların yolunu `scan_status` verir.
+- **Yerel dosyalar varsayılan olarak kapalıdır.** Asistan makinenizdeki
+  belgeleri yalnızca sizin belirttiğiniz dizinlerin içinde okuyabilir:
+  `metascout mcp --allow-dir ~/yayimlanacak` (tekrarlanabilir).
+- **Metadata güvenilmeyen metindir.** Yazar adlarını, başlıkları ve
+  yorumları belgeyi hazırlayan kişi yazmıştır. Sunucu modele bunları talimat
+  değil veri olarak ele almasını söyler; kendi başına işlem yapabilen bir
+  ajana bağlamadan önce bunu aklınızda tutun.
+- **CLI'dan daha az seçenek.** `--ignore-robots` ve deneysel görsel imza
+  kontrolü sunulmaz: `robots.txt`'yi yok saymaya bir asistan karar
+  vermemeli.
+- `metascout mcp --transport http`, bir URL'ye bağlanan istemciler için
+  `http://127.0.0.1:8770/mcp` adresinde Streamable HTTP sunar. Yerleşik
+  kimlik doğrulama yoktur — `metascout api` ile aynı duruş.
+
+Resmî MCP istemcisiyle iki taşıma yönteminde de uçtan uca denendi: yerel bir
+test sitesinin taranması, tek belge incelemesi ve yerel dizin taraması.
 
 ## Docker
 
@@ -1061,6 +1143,7 @@ metascout scan example.com --engines crawl,sitemap,wayback,google,serper,brave,d
 metascout scan --help
 metascout web --help
 metascout api --help
+metascout mcp --help
 metascout local-scan --help
 metascout visual-signature-scan --help
 metascout diff --help
@@ -1116,6 +1199,16 @@ metascout update --help
 | `--output-dir` | `./metascout_output` | Her job'ın rapor/indirmelerinin kaydedileceği yer |
 | `--max-workers` | `2` | Aynı anda çalışan azami tarama sayısı |
 | `--max-pending` | `50` | Aynı anda kuyrukta/çalışan azami tarama sayısı; bunun üzerinde `429` döner |
+
+`metascout mcp` seçenekleri — bkz. yukarıdaki [MCP sunucusu](#mcp-sunucusu-opsiyonel):
+
+| Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `--output-dir` | `~/metascout_output` | Taramaların kaydedildiği ve geri okunduğu yer |
+| `--transport` | `stdio` | `stdio`, ya da Streamable HTTP için `http` |
+| `--host` / `--port` | `127.0.0.1` / `8770` | Yalnızca `--transport http` ile |
+| `--allow-dir` | yok | Asistanın tarayabileceği yerel bir dizin (tekrarlanabilir) |
+| `--max-workers` | `2` | Aynı anda çalışan azami tarama sayısı |
 
 `metascout local-scan DIRECTORY` — `DIRECTORY`'de (özyinelemeli aranır)
 zaten bulunan belgeleri analiz eder: keşif yok, indirme yok, sadece
@@ -1206,11 +1299,12 @@ src/metascout/
 ├── diff.py                  iki report.json çıktısını karşılaştırır (yeni/kaldırılmış belge, bulgu, içerik sonucu)
 ├── api/                      opsiyonel REST API servisi (`metascout api`), web.py'dan ayrı
 │   ├── app.py               FastAPI uygulaması + route'lar (job tabanlı: POST başlatır, GET sorgular/getirir)
-│   ├── jobs.py               bellek-içi job kaydı + pipeline'ı çalıştıran arka plan thread havuzu
 │   └── schemas.py            Pydantic istek/yanıt modelleri (otomatik üretilen /docs'u da besler)
-├── pipeline.py              discover → download → extract → analyze akışı (CLI, web ve api'nin ortak motoru)
+├── jobs.py                  bellek-içi job kaydı + arka plan thread havuzu; api ve mcp ortak kullanır
+├── mcp_server.py            opsiyonel MCP sunucusu (`metascout mcp`): yapay zekâ asistanları için tarama araçları
+├── pipeline.py              discover → download → extract → analyze akışı (CLI, web, api ve mcp'nin ortak motoru)
 ├── updater.py               `metascout update`: en son GitHub sürümü → git ile ilerletme / pip ile yükseltme
-├── cli.py                   click tabanlı `scan` / `web` / `api` / `local-scan` / `visual-signature-scan` / `diff` / `update` komutları
+├── cli.py                   click tabanlı `scan` / `web` / `api` / `mcp` / `local-scan` / `visual-signature-scan` / `diff` / `update` komutları
 └── web.py                   Flask tabanlı yerel web arayüzü
 ```
 
