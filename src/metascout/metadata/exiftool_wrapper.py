@@ -9,6 +9,7 @@ import tempfile
 import zipfile
 
 from ..models import DocumentMetadata, DownloadedDocument
+from .ole_media import OLE_DOC_TYPES, extract_ole_media, is_ole_file
 
 _BATCH_SIZE = 40
 
@@ -110,13 +111,21 @@ def _extract_zip_media(doc_path: str, dest_dir: str) -> dict[str, str]:
 
 
 def _embedded_media_metadata(doc: DownloadedDocument, per_file_timeout: int) -> dict:
-    """exiftool tags of every picture inside a ZIP-based document, keyed
-    "<member name>:<Group>:<Tag>" (e.g. "word/media/image1.jpeg:IFD0:Artist")."""
-    if doc.filetype.lower() not in _ZIP_DOC_TYPES or not zipfile.is_zipfile(doc.local_path):
+    """exiftool tags of every picture inside an Office document, keyed
+    "<member name>:<Group>:<Tag>": "word/media/image1.jpeg:IFD0:Artist" for a
+    ZIP-based document, "Data#1.jpg:IFD0:Artist" for an old binary one, where
+    the name is the stream the picture was found in."""
+    filetype = doc.filetype.lower()
+    if filetype in _ZIP_DOC_TYPES and zipfile.is_zipfile(doc.local_path):
+        extract = _extract_zip_media
+    elif filetype in OLE_DOC_TYPES and is_ole_file(doc.local_path):
+        def extract(path: str, dest_dir: str) -> dict[str, str]:
+            return extract_ole_media(path, dest_dir, max_files=_MAX_MEDIA_PER_DOC, max_bytes=_MAX_MEDIA_BYTES)
+    else:
         return {}
     merged: dict = {}
     with tempfile.TemporaryDirectory(prefix="metascout-media-") as tmp:
-        media = _extract_zip_media(doc.local_path, tmp)
+        media = extract(doc.local_path, tmp)
         paths = list(media)
         for i in range(0, len(paths), _BATCH_SIZE):
             batch = paths[i : i + _BATCH_SIZE]

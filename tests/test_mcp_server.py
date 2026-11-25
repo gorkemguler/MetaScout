@@ -196,7 +196,7 @@ def test_a_scan_runs_in_the_background_and_its_findings_can_be_read(tmp_path):
         return _findings(cfg, log)
 
     async def calls(client):
-        started = await _tool(client, "start_scan", targets=["example.com"], max_docs=5, subdomains=True)
+        started = await _tool(client, "start_scan", targets=["example.com"], max_docs=5, subdomains=True, images=True)
         status = await _tool(client, "scan_status", run_id=started["run_id"], wait_seconds=10)
         overview = await _tool(client, "get_findings", run_id=started["run_id"])
         names = await _tool(client, "get_findings", run_id=started["run_id"], category="usernames")
@@ -208,7 +208,7 @@ def test_a_scan_runs_in_the_background_and_its_findings_can_be_read(tmp_path):
         started, status, overview, names, doc, listed = _session(build_server(output_dir=str(tmp_path)), calls)
 
     assert started["run_id"].startswith("mcp-") and started["status"] in ("queued", "running")
-    assert seen["cfg"].max_docs == 5 and seen["cfg"].include_subdomains is True
+    assert seen["cfg"].max_docs == 5 and seen["cfg"].include_subdomains is True and seen["cfg"].images is True
     assert seen["cfg"].output_dir == str(tmp_path / started["run_id"])  # each run has its own directory
     assert status["status"] == "done" and status["log"] == ["downloading 1 document"]
     assert status["summary"]["findings"]["usernames"] == 1

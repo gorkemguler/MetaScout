@@ -22,6 +22,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "flask>=3.0",
     "ddgs>=9.0",
+    # Reads old binary Office files (.doc/.xls/.ppt) to get at the pictures
+    # inside them. Pure Python, no dependencies of its own.
+    "olefile>=0.46",
 ]
 
 [project.optional-dependencies]

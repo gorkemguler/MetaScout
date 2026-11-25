@@ -22,6 +22,12 @@ DEFAULT_CONTENT_CATEGORIES = ["tc_kimlik", "email_phone", "iban_card", "address_
 # (which is nothing, for a .txt file) — see pipeline.py and models.CriticalFile.
 DEFAULT_CRITICAL_FILETYPES = ["txt", "log", "conf", "cfg", "ini", "env", "yml", "yaml", "sql", "bak"]
 
+# Opt-in third discovery pass (ScanConfig.images): the pictures a site
+# shows. A photo straight from a phone or camera carries where it was taken,
+# on what device and by whom; most pictures on a site carry nothing, so only
+# the ones that do end up in the report (see pipeline._read_images).
+DEFAULT_IMAGE_FILETYPES = ["jpg", "jpeg", "png", "tif", "tiff", "webp", "heic"]
+
 # User-Agent identifies the tool honestly rather than spoofing a browser,
 # so target site operators can see recon traffic in their logs and block it if unwanted.
 DEFAULT_USER_AGENT = "MetaScout/0.1 (+authorized-metadata-recon-tool)"
@@ -65,6 +71,12 @@ class ScanConfig:
     # secrets/PII scan (same as any other document) once they're downloaded.
     critical_files: bool = False
     critical_file_types: list[str] = field(default_factory=lambda: list(DEFAULT_CRITICAL_FILETYPES))
+    # See DEFAULT_IMAGE_FILETYPES above. max_images is separate from max_docs:
+    # a site has far more pictures than documents, and they must not use up
+    # the documents' share.
+    images: bool = False
+    image_filetypes: list[str] = field(default_factory=lambda: list(DEFAULT_IMAGE_FILETYPES))
+    max_images: int = 200
 
 
 def default_engines() -> list[str]:

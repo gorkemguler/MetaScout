@@ -117,3 +117,25 @@ def test_html_report_marks_documents_whose_metadata_was_stripped(lang, tag):
     assert 'class="stripped-badge"' in html
     assert tag in html
     assert "Jane Doe" in html  # recovered author still reported as a username
+
+
+@pytest.mark.parametrize("lang,heading", [("en", "Devices"), ("tr", "Cihazlar")])
+def test_html_report_lists_devices_and_counts_pictures_read(lang, heading):
+    doc = DocumentMetadata(url="https://example.com/team.jpg", local_path="/tmp/t.jpg", filetype="jpg",
+                           raw={"IFD0:Make": "Canon", "IFD0:Model": "EOS R5", "ExifIFD:SerialNumber": "032021000123"})
+    findings = analyze([doc], targets=["example.com"])
+    findings.images_scanned = 40
+
+    html = render_html_report(findings, lang=lang)
+
+    assert f"<h2>{heading}</h2>" in html and 'id="devices"' in html
+    assert "Canon EOS R5" in html and "032021000123" in html
+    assert "<strong>40</strong>" in html
+
+
+@pytest.mark.parametrize("lang", ["en", "tr"])
+def test_classification_section_does_not_depend_on_a_gps_finding(lang):
+    # it used to be nested in the GPS section's condition and vanish without one
+    html = render_html_report(_classified_findings(), lang=lang)
+
+    assert 'id="classification"' in html and 'id="geolocation"' not in html

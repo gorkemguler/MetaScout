@@ -16,6 +16,9 @@ def render_json_report(findings: ScanFindings) -> str:
     payload = {
         "targets": findings.targets,
         "scanned_at": findings.scanned_at.isoformat(),
+        # Pictures read by the opt-in image pass; the ones that leaked
+        # something are in "documents", the rest are only counted here.
+        "images_scanned": findings.images_scanned,
         "documents_discovered": len(findings.documents),
         "documents_with_metadata": findings.documents_with_metadata,
         "documents_by_target": findings.documents_by_target,
@@ -44,6 +47,7 @@ def render_json_report(findings: ScanFindings) -> str:
             "servers_and_printers": _findings_dict(findings.servers_and_printers),
             "geolocation": _findings_dict(findings.geolocation),
             "classification_labels": _findings_dict(findings.classification_labels),
+            "devices": _findings_dict(findings.devices),
         },
         "content_findings": [
             {

@@ -10,7 +10,10 @@ from rich.markup import escape
 from rich.table import Table
 
 from . import __version__
-from .config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, ScanConfig, default_engines, hosts_of
+from .config import (
+    DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, DEFAULT_IMAGE_FILETYPES, ScanConfig,
+    default_engines, hosts_of,
+)
 from .pipeline import run_scan
 from .report import PdfDependencyMissing, render_html_report, render_json_report, render_pdf_report
 
@@ -69,6 +72,7 @@ def _print_summary(findings) -> None:
         ("Servers / printers", findings.servers_and_printers),
         ("Geolocation (GPS)", findings.geolocation),
         ("Classification labels", findings.classification_labels),
+        ("Devices", findings.devices),
         ("Critical files (opt-in)", findings.critical_files),
     ]:
         table.add_row(label, str(len(bucket)))
@@ -84,6 +88,12 @@ def _print_summary(findings) -> None:
         console.print(
             f"[yellow]{findings.documents_from_archive}[/yellow] document(s) were no longer live on the "
             "site and came from the Wayback Machine archive (marked in the report)."
+        )
+
+    if findings.images_scanned:
+        console.print(
+            f"[yellow]{findings.images_scanned}[/yellow] picture(s) on the site were read; only the ones "
+            "that leak something are listed among the documents."
         )
 
     if len(findings.targets) > 1:
@@ -160,7 +170,7 @@ def main() -> None:
 @click.option("--targets-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one target domain/URL per line (# comments allowed).")
 @click.option("--urls-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text file with one full document URL per line to scan directly (# comments allowed) — e.g. links you gathered by hand when an engine didn't work. Skips discovery for those URLs; still downloaded, analyzed, and included in the report like any other result.")
 @click.option("--filetypes", default=",".join(DEFAULT_FILETYPES), show_default=True, help="Comma-separated list of file extensions.")
-@click.option("--engines", default=_default_engines_csv, help="Comma-separated: crawl,sitemap,wayback,ddgs,google,serper,brave. Defaults to crawl,sitemap,wayback,ddgs plus google/serper/brave automatically if their API keys are set.")
+@click.option("--engines", default=_default_engines_csv, help="Comma-separated: crawl,sitemap,wayback,commoncrawl,ddgs,google,serper,brave. Defaults to crawl,sitemap,wayback,ddgs plus google/serper/brave automatically if their API keys are set. commoncrawl (Common Crawl's index: keyless, but slow and often unavailable) is only used when named here.")
 @click.option("--ddgs-backend", default="auto", show_default=True, help="Backend(s) for the 'ddgs' engine, e.g. duckduckgo, google, bing, brave, or 'auto' to fall back across several.")
 @click.option("--max-docs", default=50, show_default=True, help="Maximum documents to download and analyze (across all targets).")
 @click.option("--max-crawl-pages", default=200, show_default=True)
@@ -213,6 +223,18 @@ def main() -> None:
     help="Comma-separated file extensions for --critical-files.",
 )
 @click.option(
+    "--images/--no-images", default=False,
+    help="Also read the pictures the site shows (see --image-filetypes) for what their EXIF/XMP data "
+    "leaks: where a photo was taken, on which device (model and serial number) and by whom. Only "
+    "pictures that leak something are listed in the report; the rest are just counted. Uses the "
+    "crawl, sitemap, wayback and commoncrawl engines, whichever of them are enabled. Off by default.",
+)
+@click.option(
+    "--image-filetypes", default=",".join(DEFAULT_IMAGE_FILETYPES), show_default=True,
+    help="Comma-separated file extensions for --images.",
+)
+@click.option("--max-images", default=200, show_default=True, help="Maximum pictures to download and read with --images; separate from --max-docs.")
+@click.option(
     "--pdf-report/--no-pdf-report", default=False,
     help="Also write report.pdf — the same findings as a printable/shareable PDF, in --report-lang. "
     "Off by default; requires pip install 'metascout[pdf]'. An existing run can be turned into a PDF "
@@ -225,7 +247,8 @@ def scan(
     google_api_key: str | None, google_cse_id: str | None, serper_api_key: str | None,
     brave_api_key: str | None, json_report: bool, html_report: bool, report_lang: str,
     scan_content: bool, content_categories: str, visual_signature: bool,
-    critical_files: bool, critical_file_types: str, pdf_report: bool,
+    critical_files: bool, critical_file_types: str, images: bool, image_filetypes: str, max_images: int,
+    pdf_report: bool,
 ) -> None:
     """Discover documents across one or more TARGETS and extract/analyze their metadata.
 
@@ -273,6 +296,9 @@ def scan(
         visual_signature=visual_signature,
         critical_files=critical_files,
         critical_file_types=[f.strip().lower().lstrip(".") for f in critical_file_types.split(",") if f.strip()],
+        images=images,
+        image_filetypes=[f.strip().lower().lstrip(".") for f in image_filetypes.split(",") if f.strip()],
+        max_images=max_images,
     )
 
     _print_banner()

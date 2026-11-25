@@ -25,10 +25,14 @@ _MAGIC_PREFIX = {
     # Old binary Office formats are OLE2 compound files; Word also opens RTF
     # and Word-2.0 documents saved under a .doc name.
     "doc": (_OLE_MAGIC, b"{\\rt", b"\xdb\xa5"), "xls": (_OLE_MAGIC,), "ppt": (_OLE_MAGIC,),
+    # Pictures (the opt-in image pass). A site that has moved or deleted one
+    # answers with its HTML error page under the old .jpg address.
+    "jpg": (b"\xff\xd8\xff",), "jpeg": (b"\xff\xd8\xff",), "png": (b"\x89PNG\r\n\x1a\n",),
+    "tif": (b"II*\x00", b"MM\x00*"), "tiff": (b"II*\x00", b"MM\x00*"), "webp": (b"RIFF",),
 }
 # The PDF spec allows junk before %PDF (and real-world files use it), so this
 # one is searched for near the start instead of anchored to byte 0.
-_MAGIC_ANYWHERE = {"pdf": b"%PDF"}
+_MAGIC_ANYWHERE = {"pdf": b"%PDF", "heic": b"ftyp", "heif": b"ftyp"}
 # Plaintext/config types have no signature, but a site that answers an
 # unknown .txt/.env/... path with its own HTML page (a soft 404 under HTTP 200)
 # is easy to tell apart: none of these files is ever an HTML document.

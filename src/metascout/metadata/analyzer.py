@@ -76,6 +76,15 @@ RESTRICTED_LABEL_RE = re.compile(
     r"gizli|özel|hizmete|kişiye|tasnifli",
     re.IGNORECASE,
 )
+# EXIF fields naming the device a photo was taken with. "Model" alone is
+# often just the model ("iPhone 15 Pro"), so the maker is put in front of it
+# unless it is there already ("Canon" + "Canon EOS 5D Mark IV").
+DEVICE_MODEL_FIELDS = {"model", "uniquecameramodel"}
+DEVICE_MAKE_FIELD = "make"
+DEVICE_SERIAL_FIELDS = {"serialnumber", "bodyserialnumber", "internalserialnumber", "cameraserialnumber",
+                        "lensserialnumber"}
+# Placeholders cameras write when they have no serial number to give.
+EMPTY_SERIAL_RE = re.compile(r"[0\s\-]*|unknown|n/a|none", re.IGNORECASE)
 PRINTER_HINT = "printer"
 # exiftool's own composite tag combines lat+lon+direction into one clean
 # string (e.g. "41.015137 N, 28.979530 E", given -c "%.6f" in the wrapper)
@@ -214,6 +223,23 @@ def _scan_value(
                 _add(findings.classification_labels, f"{key}: {label.strip()}", doc_url, tag_name)
 
 
+def _key_prefix(tag_key: str) -> str:
+    """What a tag belongs to: "" for the document itself, "Doc1" or
+    "word/media/image1.jpeg" for something embedded in it."""
+    return tag_key.rpartition(":")[0].rpartition(":")[0]
+
+
+def _device_name(make: str | None, model: str) -> str:
+    model = model.strip()
+    if not make or not make.strip():
+        return model
+    make = make.strip()
+    # "NIKON CORPORATION" + "NIKON D850": the model already starts with the maker's name.
+    if model.lower().startswith(make.split()[0].lower()):
+        return model
+    return f"{make} {model}"
+
+
 def analyze(documents: list[DocumentMetadata], targets: list[str]) -> ScanFindings:
     findings = ScanFindings(targets=targets)
     findings.documents = documents
@@ -231,13 +257,24 @@ def analyze(documents: list[DocumentMetadata], targets: list[str]) -> ScanFindin
         if not doc.raw:
             continue
 
+        # The maker of each camera in this document, by what it belongs to:
+        # a document can hold photos from several devices.
+        makes = {_key_prefix(key): next(_string_values(value), None) for key, value in doc.raw.items()
+                 if split_tag_key(key)[1].lower() == DEVICE_MAKE_FIELD}
+
         for tag_key, raw_value in doc.raw.items():
             group, tag_name = split_tag_key(tag_key)
             if group in LOCAL_COPY_GROUPS:
                 continue
             tag_name_clean = DUPLICATE_SUFFIX_RE.sub("", tag_name).lower()
             kind = _field_kind(group, tag_name_clean)
+            if tag_name_clean in DEVICE_SERIAL_FIELDS and not isinstance(raw_value, (str, list, dict)):
+                raw_value = str(raw_value)  # exiftool prints an all-digit serial as a number
             for value in _string_values(raw_value):
                 _scan_value(findings, value, doc.url, tag_name, tag_name_clean, kind)
+                if tag_name_clean in DEVICE_MODEL_FIELDS:
+                    _add(findings.devices, _device_name(makes.get(_key_prefix(tag_key)), value), doc.url, tag_name)
+                elif tag_name_clean in DEVICE_SERIAL_FIELDS and not EMPTY_SERIAL_RE.fullmatch(value.strip()):
+                    _add(findings.devices, value.strip(), doc.url, tag_name)
 
     return findings

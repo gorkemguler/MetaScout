@@ -42,12 +42,14 @@
 - [MCP sunucusu](#mcp-sunucusu-opsiyonel)
 - [Docker](#docker)
 - [Wayback Machine keşfi](#wayback-machine-keşfi)
+- [Common Crawl keşfi](#common-crawl-keşfi)
 - [Anahtarsız arama: DDGS](#anahtarsız-arama-ddgs)
 - [Subdomain taraması](#subdomain-taraması)
 - [Kişisel veri (PII) içerik taraması](#kişisel-veri-içerik-taraması-opsiyonel)
   - [Görsel (ıslak) imza tespiti](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)
   - [Taranmış belgeler için OCR](#taranmış-belgeler-için-ocr)
 - [Kritik / hassas dosya keşfi](#kritik--hassas-dosya-keşfi-opsiyonel)
+- [Sitedeki görseller](#sitedeki-görseller-opsiyonel)
 - [PDF raporu](#pdf-raporu-opsiyonel)
 - [Arama motoru API anahtarları](#arama-motoru-api-anahtarları-opsiyonel)
 - [Tüm CLI seçenekleri](#tüm-cli-seçenekleri)
@@ -86,6 +88,8 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 - **GPS koordinatları**, konum bilgisi içeren bir fotoğraf (ör. bir
   belgeye yapıştırılmış telefon fotoğrafı) belgeye gömülüyse — raporda
   haritada görüntüleme linki de sunulur
+- **Cihazlar**: fotoğrafın çekildiği kamera, telefon ya da tarayıcı ve seri
+  numarası
 - **Bilerek silinmiş metadata.** ExifTool bir PDF'in metadata'sını silerken
   dosyayı yeniden yazmaz: sonuna, eski Info sözlüğüne ve XMP'ye artık işaret
   etmeyen bir artımlı güncelleme ekler. Orijinal veri dosyada kalır, ama
@@ -102,8 +106,9 @@ metadata'sını [ExifTool](https://exiftool.org/) ile çıkarır ve şunları ra
 
 Yalnızca dosyanın kendi metadata'sı değil, gömülü içerik de okunur: PDF'e
 yerleştirilmiş görseller ve Illustrator verisi (exiftool `-ee`) ile
-DOCX/XLSX/PPTX/ODF dosyalarının içindeki resimler, her biri kendi EXIF/XMP
-bilgisiyle.
+DOCX/XLSX/PPTX/ODF dosyalarının ve eski ikili DOC/XLS/PPT dosyalarının içindeki
+resimler, her biri kendi EXIF/XMP bilgisiyle. `--images` ile sitede gösterilen
+görseller de okunur (bkz. [Sitedeki görseller](#sitedeki-görseller-opsiyonel)).
 
 ## Özellikler
 
@@ -764,6 +769,26 @@ adresi yer alır. Böyle bir belge canlı siteden kaldırılmıştır ama arşiv
 üzerinden hâlâ herkese açıktır — ne yapılacağına karar verirken bilinmesi
 gereken bir ayrım.
 
+## Common Crawl keşfi
+
+`commoncrawl` motoru, [Common Crawl](https://commoncrawl.org) dizinine
+tarayıcısının bir hedef host'ta gördüğü dosyaları, en yeni iki taramasında
+sorar. Wayback gibi ücretsizdir, anahtar gerektirmez ve siteden artık link
+verilmeyen dosyaları bulur; farklı bir tarayıcıdan geldiği için ikisi farklı
+dosyalar bulur.
+
+```bash
+metascout scan example.com --engines crawl,sitemap,wayback,commoncrawl,ddgs
+```
+
+Varsayılan motorlardan **değildir**: dizin sorgu başına birkaç saniye sürer ve
+sık sık 502/504 döner. Başarısız bir sorgu bir kez tekrarlanır; art arda üç
+hatadan sonra motor, her subdomain için zaman aşımını beklemek yerine on
+dakika boyunca sormayı bırakır ve tarama kaydı neden bir şey bulamadığını
+yazar. Common Crawl büyük dosyaların yalnızca kırpılmış bir kopyasını tuttuğu
+için, canlı sitede artık olmayan bir belge aynı tarihli Wayback Machine
+kopyasından indirilir.
+
 ## Anahtarsız arama: DDGS
 
 `ddgs` motoru, [DDGS](https://pypi.org/project/ddgs/) adlı Python kütüphanesini
@@ -860,10 +885,10 @@ gelmez. E-posta/telefon ve zayıf sinyalli adres/doğum tarihi ipuçları
 bulundukları haliyle gösterilir, çünkü onları göstermenin amacı zaten bu.
 
 Metin çıkarımı PDF (`pypdf` ile), `.docx`/`.xlsx`/`.pptx` ve
-`.odt`/`.ods`/`.odp` formatlarını kapsar. Eski ikili Office formatları
-(`.doc`/`.xls`/`.ppt`) desteklenmez — çok daha ağır bir bağımlılık
-(`olefile`) gerektirir, görece nadir kazanımlar için, bu yüzden atlanır
-(bu formatlarda metadata taraması normal şekilde çalışmaya devam eder).
+`.odt`/`.ods`/`.odp` formatlarını kapsar. Eski ikili Office dosyalarının
+(`.doc`/`.xls`/`.ppt`) metni çıkarılmaz: metin, her biçimde ayrı bir kayıt
+düzeninde tutulur ve bu kendi başına bir iştir. Bu dosyaların metadata'sı ve
+içlerindeki resimler normal şekilde okunur.
 
 ### Görsel (ıslak) imza tespiti — DENEYSEL, ayrıca opsiyonel
 
@@ -1041,6 +1066,38 @@ sadece kritik dosya içeren, normal belge içermeyen bir dizin bile "analiz
 edilecek bir şey yok" eski çıkmazına düşmeden, risk rozeti dahil tam bir
 rapor üretiyor.
 
+## Sitedeki görseller (opsiyonel)
+
+Metadata taşıyan dosyalar yalnızca belgeler değildir: telefondan ya da
+kameradan doğrudan yüklenmiş bir fotoğraf nerede, hangi cihazla (model ve seri
+numarası) ve çoğu zaman kim tarafından çekildiğini kaydeder. `--images`,
+sitenin gösterdiği görseller için üçüncü bir keşif geçişi çalıştırır ve onları
+da aynı şekilde okur.
+
+```bash
+metascout scan example.com --images
+```
+
+- **Ne bulunur.** `<img>` etiketleri (lazy-loading temalarının kullandığı
+  `data-src`/`srcset` dahil), `<picture>` kaynakları, `og:image`/`twitter:image`,
+  görsel sitemap'leri ve `wayback`/`commoncrawl` listeleri. CMS'in küçülttüğü
+  `foto-300x200.jpg` gibi bir kopyadan, EXIF verisini genelde hâlâ taşıyan asıl
+  yükleme `foto.jpg`'ye gidilir. Sitenin diğer host'larındaki dosyalar
+  (`cdn.example.com`, `static.example.com`) da sayılır.
+- **Ne raporlanır.** Yalnızca bir şey sızdıran görseller — GPS konumu, kişi ya
+  da hesap adı, e-posta, iç dosya yolu, gizlilik etiketi ya da cihaz seri
+  numarası. Gerisi sayılır ("120 görsel okundu") ama listelenmez; birkaç yüz
+  stok fotoğraf belgeleri gölgelemez.
+- **Sınırlar.** `--max-images` (200), `--max-docs`'tan ayrıdır; uzantılar
+  `--image-filetypes` ile verilir. Arama motoru dork'ları görseller için
+  kullanılmaz. Sayfalar tarama başına bir kez gezilir ve bütün geçişler
+  tarafından paylaşılır.
+
+Kamera, telefon ve tarayıcı modelleri ile seri numaraları — sitedeki ya da
+belgelerin içindeki görsellerden — raporda ayrı bir **Cihazlar** bölümünde
+yer alır. Seri numarası, aynı cihazla çekilmiş bütün fotoğrafları birbirine
+bağlar.
+
 ## PDF raporu (opsiyonel)
 
 HTML ve JSON raporlarının yanında MetaScout **PDF** de üretebilir — aynı
@@ -1159,7 +1216,7 @@ metascout update --help
 | `--targets-file` | – | Satır başına bir domain/URL içeren dosya (`#` yorum) |
 | `--urls-file` | – | Satır başına bir tam belge URL'i içeren, keşfi atlayıp doğrudan taranacak dosya (`#` yorum) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | Aranacak dosya uzantıları |
-| `--engines` | `crawl,sitemap,wayback,ddgs` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,google,serper,brave,ddgs` arasından virgülle liste |
+| `--engines` | `crawl,sitemap,wayback,ddgs` (+`google`/`serper`/`brave` ilgili API anahtarı `.env`'de varsa otomatik eklenir) | `crawl,sitemap,wayback,commoncrawl,google,serper,brave,ddgs` arasından virgülle liste; `commoncrawl` yalnızca adı verilirse kullanılır (bkz. [Common Crawl](#common-crawl-keşfi)) |
 | `--subdomains` / `--no-subdomains` | kapalı | crt.sh ile subdomain keşfi |
 | `--max-subdomains` | `20` | Taranacak azami subdomain sayısı |
 | `--max-docs` | `50` | İndirilip analiz edilecek azami belge sayısı |
@@ -1177,6 +1234,9 @@ metascout update --help
 | `--visual-signature` / `--no-visual-signature` | kapalı | **DENEYSEL**, `--scan-content`'ten bağımsız: görsel (görüntü tabanlı) imza tespiti; yavaş (bkz. [yukarıda](#görsel-ıslak-imza-tespiti--deneysel-ayrıca-opsiyonel)), `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript gerektirir |
 | `--critical-files` / `--no-critical-files` | kapalı | Düz metin/config tarzı dosyalar için ikinci keşif geçişi (bkz. [yukarıda](#kritik--hassas-dosya-keşfi-opsiyonel)) |
 | `--critical-file-types` | `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` | Virgülle ayrılmış alt küme, sadece `--critical-files` ile kullanılır |
+| `--images` / `--no-images` | kapalı | Sitenin gösterdiği görselleri de oku (bkz. [Sitedeki görseller](#sitedeki-görseller-opsiyonel)) |
+| `--image-filetypes` | `jpg,jpeg,png,tif,tiff,webp,heic` | Virgülle ayrılmış, sadece `--images` ile kullanılır |
+| `--max-images` | `200` | İndirilip okunacak azami görsel; `--max-docs`'tan ayrı |
 | `--json-report` / `--no-json-report` | açık | JSON rapor üretimi |
 | `--html-report` / `--no-html-report` | açık | HTML rapor üretimi |
 | `--report-lang` | `en` | HTML rapor dili: `en` veya `tr` |
@@ -1279,12 +1339,14 @@ src/metascout/
 │   ├── crawler.py         doğrudan site taraması (robots.txt uyumlu)
 │   ├── sitemap.py         sitemap.xml / sitemap index ayrıştırma
 │   ├── wayback.py         Wayback Machine (archive.org) CDX API keşfi
+│   ├── commoncrawl.py     Common Crawl dizini keşfi (isteğe bağlı motor)
 │   ├── search_engines.py  Google/Serper/Brave dork araması
 │   ├── ddgs_search.py     anahtarsız DDGS (DuckDuckGo/diğer motorlar) dork araması
 │   └── subdomains.py      crt.sh üzerinden pasif subdomain keşfi
 ├── downloader.py           eşzamanlı indirme, boyut sınırı, sha256
 ├── metadata/
 │   ├── exiftool_wrapper.py exiftool subprocess sarmalayıcısı
+│   ├── ole_media.py        eski ikili Office dosyalarındaki (.doc/.xls/.ppt) resimler
 │   └── analyzer.py         regex + alan bazlı bulgu çıkarımı + hedef bazlı sayım
 ├── content_scan/            isteğe bağlı belge *içerik* PII taraması (--scan-content)
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument metin çıkarımı

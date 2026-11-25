@@ -264,3 +264,24 @@ def test_download_one_keeps_real_text_files(tmp_path):
         result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
 
         assert result.error is None, filetype
+
+
+def test_download_one_rejects_an_html_page_served_for_a_picture(tmp_path):
+    doc = DiscoveredDocument(url="https://example.com/uploads/team.jpg", source=DiscoverySource.CRAWL, filetype="jpg")
+    session = MagicMock()
+    session.get.return_value = _FakeResp(b"<!DOCTYPE html><html><body>Page not found</body></html>")
+
+    result = _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000)
+
+    assert result.error and "HTML page" in result.error
+
+
+def test_download_one_keeps_real_pictures(tmp_path):
+    for filetype, payload in [("jpg", b"\xff\xd8\xff\xe1rest"), ("png", b"\x89PNG\r\n\x1a\nrest"),
+                              ("tif", b"MM\x00*rest"), ("heic", b"\x00\x00\x00\x18ftypheic")]:
+        doc = DiscoveredDocument(url=f"https://example.com/p.{filetype}", source=DiscoverySource.CRAWL,
+                                 filetype=filetype)
+        session = MagicMock()
+        session.get.return_value = _FakeResp(payload)
+
+        assert _download_one(doc, str(tmp_path), session, timeout=10, max_bytes=1_000_000).error is None, filetype

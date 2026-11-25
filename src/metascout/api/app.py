@@ -23,7 +23,7 @@ def _summary_of(findings: ScanFindings) -> JobSummary:
         len(findings.usernames) + len(findings.emails) + len(findings.software)
         + len(findings.operating_systems) + len(findings.internal_paths)
         + len(findings.servers_and_printers) + len(findings.geolocation)
-        + len(findings.classification_labels)
+        + len(findings.classification_labels) + len(findings.devices)
     )
     return JobSummary(
         documents_discovered=len(findings.documents),
@@ -152,6 +152,9 @@ def create_app(*, output_dir: str = "./metascout_output", max_workers: int = 2, 
             visual_signature=body.visual_signature,
             critical_files=body.critical_files,
             critical_file_types=[f.strip().lower().lstrip(".") for f in body.critical_file_types if f.strip()],
+            images=body.images,
+            image_filetypes=[f.strip().lower().lstrip(".") for f in body.image_filetypes if f.strip()],
+            max_images=body.max_images,
         )
 
         def work(log, run_path):

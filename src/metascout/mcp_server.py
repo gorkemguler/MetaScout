@@ -33,7 +33,7 @@ from .pipeline import run_local_document_scan, run_scan
 
 CONTENT, CRITICAL = "content_findings", "critical_files"
 CATEGORIES = [*FINDING_CATEGORIES, CONTENT, CRITICAL]
-ENGINES = {"crawl", "sitemap", "wayback", "ddgs", "google", "serper", "brave"}
+ENGINES = {"crawl", "sitemap", "wayback", "commoncrawl", "ddgs", "google", "serper", "brave"}
 
 _VALUE_LIMIT = 300        # characters kept of any one extracted value
 _METADATA_TAG_LIMIT = 150  # raw tags returned for one document
@@ -45,7 +45,8 @@ _MAX_WAIT = 50
 INSTRUCTIONS = """\
 MetaScout finds the documents a website publishes (PDF, Office, OpenDocument) and reports what \
 their metadata leaks: employee and account names, email addresses, internal file paths, server \
-and share names, software versions, GPS coordinates and classification labels.
+and share names, software versions, GPS coordinates, camera models and serial numbers, and \
+classification labels. With images=true it reads the site's pictures as well.
 
 Typical flow: start_scan -> scan_status(run_id, wait_seconds=45) until status is "done" -> \
 get_findings(run_id) for the overview -> get_findings(run_id, category=...) and get_document for \
@@ -84,6 +85,7 @@ def summarize(payload: dict) -> dict:
         "findings": {cat: len(findings.get(cat) or {}) for cat in FINDING_CATEGORIES},
         CONTENT: dict(sorted(content.items())),
         CRITICAL: sum(1 for c in payload.get("critical_files") or [] if not c.get("error")),
+        "images_scanned": payload.get("images_scanned", 0),
     }
 
 
@@ -364,9 +366,10 @@ def build_server(*, output_dir: str, allow_dirs: tuple[str, ...] | list[str] = (
         max_docs: Annotated[int, Field(ge=1, le=2000, description="Most documents to download and analyse.")] = 50,
         subdomains: Annotated[bool, Field(description="Also find and scan subdomains (Certificate Transparency logs).")] = False,
         critical_files: Annotated[bool, Field(description="Also look for exposed .env/.sql/.log/.bak-style files.")] = False,
+        images: Annotated[bool, Field(description="Also read the pictures the site shows for GPS location, camera model and serial number, and photographer. Only pictures that leak something are kept.")] = False,
         scan_content: Annotated[bool, Field(description="Also scan document text for personal data and secrets (needs the content-scan extra; values come back masked).")] = False,
         filetypes: Annotated[list[str] | None, Field(description="File extensions to look for. Default: PDF, Office and OpenDocument types.")] = None,
-        engines: Annotated[list[str] | None, Field(description="Discovery sources: crawl, sitemap, wayback, ddgs, google, serper, brave. Default: every one that is configured.")] = None,
+        engines: Annotated[list[str] | None, Field(description="Discovery sources: crawl, sitemap, wayback, ddgs, google, serper, brave, and the slower commoncrawl. Default: all but commoncrawl, as far as they are configured.")] = None,
     ) -> dict[str, Any]:
         """Start a metadata-exposure scan of one or more domains. Returns at once with a run id;
         the scan runs in the background and takes from under a minute to tens of minutes,
@@ -382,7 +385,7 @@ def build_server(*, output_dir: str, allow_dirs: tuple[str, ...] | list[str] = (
             raise ToolError(f"Unknown engine(s) {', '.join(unknown)}. Use: {', '.join(sorted(ENGINES))}.")
         job = run_as_job(scan_config(
             targets, urls, max_docs=max_docs, include_subdomains=subdomains, critical_files=critical_files,
-            scan_content=scan_content, filetypes=_clean(filetypes) or list(DEFAULT_FILETYPES), engines=chosen,
+            images=images, scan_content=scan_content, filetypes=_clean(filetypes) or list(DEFAULT_FILETYPES), engines=chosen,
         ))
         return {"run_id": job.run_id, "status": job.status, "targets": targets,
                 "next": "Call scan_status(run_id, wait_seconds=45) until status is 'done'."}
@@ -502,7 +505,7 @@ def build_server(*, output_dir: str, allow_dirs: tuple[str, ...] | list[str] = (
         return (
             f"Assess what the publicly available documents on {domain} leak through their metadata. "
             "I am authorised to assess this domain.\n\n"
-            f"1. start_scan(targets=[\"{domain}\"], subdomains=true, critical_files=true), then "
+            f"1. start_scan(targets=[\"{domain}\"], subdomains=true, critical_files=true, images=true), then "
             "scan_status(run_id, wait_seconds=45) until it is done.\n"
             "2. get_findings(run_id) for the overview, then each non-empty category.\n"
             "3. Use get_document on the documents behind the most serious values.\n\n"

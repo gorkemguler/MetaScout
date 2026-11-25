@@ -12,6 +12,7 @@ class DiscoverySource(str, Enum):
     CRAWL = "crawl"
     SITEMAP = "sitemap"
     WAYBACK = "wayback"
+    COMMONCRAWL = "commoncrawl"
     DDGS = "ddgs"
     MANUAL = "manual"
 
@@ -121,6 +122,13 @@ class ScanFindings:
     # Classification property). A document marked for internal use that is
     # nonetheless published is a finding in itself.
     classification_labels: dict[str, Finding] = field(default_factory=dict)
+    # Cameras, phones and scanners named in the EXIF of a photo — on the site
+    # or pasted into a document — and their serial numbers, which tie every
+    # picture taken with one device together.
+    devices: dict[str, Finding] = field(default_factory=dict)
+    # Pictures read by the opt-in image pass (ScanConfig.images). Only those
+    # that leak something are kept in `documents`; this is how many were looked at.
+    images_scanned: int = 0
     content_findings: list[ContentFinding] = field(default_factory=list)
     # Opt-in (ScanConfig.critical_files) — see CriticalFile above.
     critical_files: list[CriticalFile] = field(default_factory=list)

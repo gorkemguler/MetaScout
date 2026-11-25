@@ -73,7 +73,9 @@ _STRINGS = {
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> '
                          "instead if you run into that (free credit included, check the site for "
                          "the current amount), or set the DDGS backend below to <code>google</code> "
-                         "for a keyless option.",
+                         "for a keyless option. commoncrawl asks Common Crawl's index for files it "
+                         "has seen on the site — keyless like wayback, but slow (several seconds a "
+                         "query) and often unavailable, so it is off unless you check it.",
         "ddgs_hint": "'ddgs' needs no key at all — it scrapes DuckDuckGo (and, with 'auto', falls "
                      "back across other engines) directly, so it's the most fragile option here and "
                      "can get rate-limited under heavy use. On by default since it's reliable in "
@@ -114,6 +116,11 @@ _STRINGS = {
                                   "(not just the pip package). For a large batch, running "
                                   "<code>metascout visual-signature-scan</code> from a terminal against "
                                   "this scan's output afterward is more practical than waiting here.",
+        "images_label": "Also read the pictures on the site (GPS location, camera, serial number, photographer)",
+        "images_hint": "A third discovery pass, through crawl, sitemap, wayback and commoncrawl, for the "
+                       "pictures the site shows. A photo straight from a phone or camera records where "
+                       "it was taken and on which device. Only pictures that leak something are listed; "
+                       "the rest are counted. Up to 200 pictures are read.",
         "critical_files_label": "Also search for critical/sensitive files (.env, .log, .conf, .sql, ...)",
         "critical_files_hint": "Independent of content scanning above — a second discovery pass using "
                                 "the same engines, but for plaintext/config-style files instead of "
@@ -210,7 +217,9 @@ _STRINGS = {
                          '<a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a>'
                          "'i deneyin (ücretsiz kredi var, güncel miktarı sitede kontrol edin), ya da "
                          "anahtarsız bir seçenek için aşağıdaki DDGS motorunu <code>google</code> "
-                         "olarak ayarlayın.",
+                         "olarak ayarlayın. commoncrawl, Common Crawl dizinine sitede gördüğü "
+                         "dosyaları sorar — wayback gibi anahtarsızdır ama yavaştır (sorgu başına "
+                         "birkaç saniye) ve sık sık yanıt vermez; bu yüzden siz işaretlemedikçe kapalıdır.",
         "ddgs_hint": "'ddgs' hiçbir anahtar gerektirmez — doğrudan DuckDuckGo'yu (ve 'auto' modunda "
                      "yedek olarak diğer motorları) kazır, bu yüzden buradaki en kırılgan seçenektir "
                      "ve yoğun kullanımda hız sınırına takılabilir. Pratikte güvenilir olduğu için "
@@ -251,6 +260,11 @@ _STRINGS = {
                                   "gerektirir (sadece pip paketi yetmez). Büyük bir belge grubu için, "
                                   "burada beklemek yerine bu taramanın sonuçları üzerinde terminalden "
                                   "<code>metascout visual-signature-scan</code> çalıştırmak daha pratik.",
+        "images_label": "Sitedeki görselleri de oku (GPS konumu, kamera, seri numarası, fotoğrafçı)",
+        "images_hint": "crawl, sitemap, wayback ve commoncrawl ile sitenin gösterdiği görseller için "
+                       "üçüncü bir keşif geçişi. Telefondan ya da kameradan doğrudan yüklenmiş bir "
+                       "fotoğraf nerede ve hangi cihazla çekildiğini kaydeder. Yalnızca bir şey "
+                       "sızdıran görseller listelenir, gerisi sayılır. En fazla 200 görsel okunur.",
         "critical_files_label": "Kritik/hassas dosyaları da ara (.env, .log, .conf, .sql, ...)",
         "critical_files_hint": "Yukarıdaki içerik taramasından bağımsız — aynı motorları kullanan "
                                 "ikinci bir keşif geçişi, ama belgeler yerine düz metin/config tarzı "
@@ -494,6 +508,7 @@ _FORM_BODY = """
     <label><input type="checkbox" name="engines" value="crawl" checked> crawl</label>
     <label><input type="checkbox" name="engines" value="sitemap" checked> sitemap</label>
     <label><input type="checkbox" name="engines" value="wayback" checked> wayback</label>
+    <label><input type="checkbox" name="engines" value="commoncrawl"> commoncrawl</label>
     <label><input type="checkbox" name="engines" value="google" {google_checked}> google{google_hint}</label>
     <label><input type="checkbox" name="engines" value="serper" {serper_checked}> serper{serper_hint}</label>
     <label><input type="checkbox" name="engines" value="brave" {brave_checked}> brave{brave_hint}</label>
@@ -526,6 +541,9 @@ _FORM_BODY = """
 
   <label><input type="checkbox" name="critical_files" id="critical_files"> {critical_files_label}</label>
   <div class="hint">{critical_files_hint}</div>
+
+  <label><input type="checkbox" name="images" id="images"> {images_label}</label>
+  <div class="hint">{images_hint}</div>
 
   <label>{report_lang_label}</label>
   <div class="checks">
@@ -631,6 +649,8 @@ def _render_form(
         visual_signature_hint=_t(ui_lang, "visual_signature_hint"),
         critical_files_label=_t(ui_lang, "critical_files_label"),
         critical_files_hint=_t(ui_lang, "critical_files_hint"),
+        images_label=_t(ui_lang, "images_label"),
+        images_hint=_t(ui_lang, "images_hint"),
         report_lang_label=_t(ui_lang, "report_lang_label"),
         report_lang_en_checked="checked" if ui_lang != "tr" else "",
         report_lang_tr_checked="checked" if ui_lang == "tr" else "",
@@ -1069,6 +1089,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
         content_categories = request.form.getlist("content_categories") or list(DEFAULT_CONTENT_CATEGORIES)
         visual_signature = request.form.get("visual_signature") == "on"
         critical_files = request.form.get("critical_files") == "on"
+        images = request.form.get("images") == "on"
         report_lang = request.form.get("report_lang", "en")
         if report_lang not in ("en", "tr"):
             report_lang = "en"
@@ -1098,6 +1119,7 @@ def create_app(output_dir: str = "./metascout_output") -> Flask:
             visual_signature=visual_signature,
             critical_files=critical_files,
             critical_file_types=list(DEFAULT_CRITICAL_FILETYPES),
+            images=images,
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             google_cse_id=os.environ.get("GOOGLE_CSE_ID"),
             serper_api_key=os.environ.get("SERPER_API_KEY"),

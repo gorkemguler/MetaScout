@@ -290,3 +290,28 @@ def test_analyze_skips_macos_per_user_temp_paths():
     findings = analyze([doc], targets=["example.com"])
 
     assert set(findings.internal_paths) == {"/Users/designer/Desktop/Brochure/cover.png"}
+
+
+def test_analyze_names_the_devices_photos_were_taken_with():
+    doc = DocumentMetadata(url="https://example.com/a.docx", local_path="", filetype="docx", raw={
+        "word/media/image1.jpeg:IFD0:Make": "Apple",
+        "word/media/image1.jpeg:IFD0:Model": "iPhone 15 Pro",
+        "word/media/image2.jpeg:IFD0:Make": "NIKON CORPORATION",
+        "word/media/image2.jpeg:IFD0:Model": "NIKON D850",
+        "word/media/image2.jpeg:ExifIFD:SerialNumber": 6012345,  # exiftool prints all-digit serials as numbers
+        "word/media/image2.jpeg:ExifIFD:LensSerialNumber": "0000000000",  # a camera's "no serial" placeholder
+        "ICC_Profile:DeviceModel": "IEC sRGB",  # the colour profile, not a device
+    })
+
+    findings = analyze([doc], targets=["example.com"])
+
+    # each photo's model is paired with its own maker, not the other photo's
+    assert set(findings.devices) == {"Apple iPhone 15 Pro", "NIKON D850", "6012345"}
+    assert findings.devices["6012345"].field_name == "SerialNumber"
+
+
+def test_analyze_does_not_repeat_a_maker_the_model_already_names():
+    doc = DocumentMetadata(url="https://example.com/p.jpg", local_path="", filetype="jpg",
+                           raw={"IFD0:Make": "Canon", "IFD0:Model": "Canon EOS 5D Mark IV"})
+
+    assert list(analyze([doc], targets=["example.com"]).devices) == ["Canon EOS 5D Mark IV"]

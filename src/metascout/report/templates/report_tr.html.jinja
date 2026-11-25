@@ -161,7 +161,7 @@
       <span class="meta-item">Tarama tarihi: <strong>{{ findings.scanned_at.strftime("%d.%m.%Y %H:%M") }} UTC</strong></span>
       <span class="meta-item">Keşfedilen belge: <strong>{{ findings.documents | length }}</strong></span>
       <span class="meta-item">Metadata okunan: <strong>{{ findings.documents_with_metadata }}</strong></span>
-      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length + findings.classification_labels|length %}
+      {% set total_findings = findings.usernames|length + findings.emails|length + findings.software|length + findings.operating_systems|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.geolocation|length + findings.classification_labels|length + findings.devices|length %}
       {% set sensitive_hits = findings.usernames|length + findings.emails|length + findings.internal_paths|length + findings.servers_and_printers|length + findings.critical_files|length %}
       {% set critical_content_hits = findings.content_findings | selectattr("category", "in", ["tc_kimlik", "iban", "credit_card"]) | list | length %}
       {% if total_findings == 0 and not findings.content_findings and not findings.critical_files %}
@@ -216,9 +216,13 @@
           <a href="#classification">Gizlilik Etiketleri</a> bölümüne bakın.
         {% endif %}
         {% if findings.geolocation %}
-          Ayrıca, belgelere yapıştırılmış fotoğraflarda gömülü
+          Ayrıca, belgelere yapıştırılmış ya da sitede gösterilen fotoğraflarda
           <strong>{{ findings.geolocation | length }} GPS konumu</strong> bulundu — aşağıdaki
           <a href="#geolocation">Konum</a> bölümüne bakın.
+        {% endif %}
+        {% if findings.images_scanned %}
+          Sitedeki <strong>{{ findings.images_scanned }}</strong> görsel de okundu; yalnızca bir şey
+          sızdıranlar (konum, ad, cihaz seri numarası) listelendi.
         {% endif %}
         {% if findings.content_findings %}
           Ayrıca, isteğe bağlı belge içeriği taramasında
@@ -351,7 +355,7 @@
       </div>
       {{ finding_table(findings.servers_and_printers, "Sunucu / yazıcı") }}
     </section>
-    {% if findings.geolocation %}
+    {% if findings.classification_labels %}
     <section id="classification">
       <div class="section-head">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg></div>
@@ -364,6 +368,8 @@
       {% endif %}
       {{ finding_table(findings.classification_labels, "Etiket") }}
     </section>
+    {% endif %}
+    {% if findings.geolocation %}
     <section id="geolocation">
       <div class="section-head">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg></div>
@@ -388,6 +394,17 @@
         </tbody>
       </table>
       </div>
+    </section>
+    {% endif %}
+    {% if findings.devices %}
+    <section id="devices">
+      <div class="section-head">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg></div>
+        <h2>Cihazlar</h2>
+        <span class="n">{{ findings.devices | length }}</span>
+      </div>
+      <p class="empty">Fotoğrafların EXIF verisinde adı geçen kamera, telefon ve tarayıcılar ile seri numaraları — seri numarası, aynı cihazla çekilmiş bütün fotoğrafları birbirine bağlar.</p>
+      {{ finding_table(findings.devices, "Cihaz / seri numarası") }}
     </section>
     {% endif %}
 

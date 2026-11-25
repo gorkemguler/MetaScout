@@ -68,8 +68,10 @@ def sitemap_search(
                 if loc.text:
                     queue.append(loc.text.strip())
         elif tag.endswith("urlset"):
-            for loc in root.findall(".//sm:url/sm:loc", _NS) or root.findall(".//url/loc"):
-                if not loc.text:
+            # Every <loc> under the urlset: the page URLs, and the <image:loc>
+            # entries of an image sitemap, which name pictures directly.
+            for loc in root.iter():
+                if not (loc.tag == "loc" or loc.tag.endswith("}loc")) or not loc.text:
                     continue
                 link = loc.text.strip()
                 link_path = urlparse(link).path

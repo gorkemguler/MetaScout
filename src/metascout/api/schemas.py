@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from ..config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES
+from ..config import DEFAULT_CONTENT_CATEGORIES, DEFAULT_CRITICAL_FILETYPES, DEFAULT_FILETYPES, DEFAULT_IMAGE_FILETYPES
 
 
 class ScanRequest(BaseModel):
@@ -17,7 +17,7 @@ class ScanRequest(BaseModel):
     targets: list[str] = Field(default_factory=list, description="Domains or base URLs to scan, e.g. [\"example.com\"]. Can be omitted if manual_urls is given — hostnames are then derived from those URLs automatically.")
     manual_urls: list[str] = Field(default_factory=list, description="Full document URLs to scan directly, skipping discovery for these (still downloaded, analyzed, and included in the report).")
     filetypes: list[str] = Field(default_factory=lambda: list(DEFAULT_FILETYPES), description="File extensions to look for.")
-    engines: list[str] | None = Field(default=None, description="Subset of crawl,sitemap,wayback,ddgs,google,serper,brave. Defaults to crawl+sitemap+wayback+ddgs, plus google/serper/brave automatically if that engine's API key is configured on the server (env var/.env) — same auto-detection as the CLI.")
+    engines: list[str] | None = Field(default=None, description="Subset of crawl,sitemap,wayback,commoncrawl,ddgs,google,serper,brave. Defaults to crawl+sitemap+wayback+ddgs, plus google/serper/brave automatically if that engine's API key is configured on the server (env var/.env) — same auto-detection as the CLI. commoncrawl is keyless but slow and is only used when listed.")
     ddgs_backend: str = Field(default="auto", description="Backend(s) for the 'ddgs' engine, e.g. 'duckduckgo', 'google', 'bing', or a comma-separated list.")
     max_docs: int = Field(default=50, ge=1, description="Maximum documents to download and analyze across all targets.")
     max_crawl_pages: int = Field(default=200, ge=1)
@@ -33,6 +33,9 @@ class ScanRequest(BaseModel):
     visual_signature: bool = Field(default=False, description="EXPERIMENTAL: slow, heuristic, image-based handwritten-signature detection.")
     critical_files: bool = Field(default=False, description="Also run a second discovery pass for plaintext/config-style 'critical' files (see critical_file_types).")
     critical_file_types: list[str] = Field(default_factory=lambda: list(DEFAULT_CRITICAL_FILETYPES), description="File extensions for critical_files.")
+    images: bool = Field(default=False, description="Also read the pictures the site shows for location, device and author data. Only pictures that leak something are listed.")
+    image_filetypes: list[str] = Field(default_factory=lambda: list(DEFAULT_IMAGE_FILETYPES), description="File extensions for images.")
+    max_images: int = Field(default=200, ge=1, description="Maximum pictures to download and read; separate from max_docs.")
     report_lang: Literal["en", "tr"] = Field(default="en", description="HTML report language.")
 
     @model_validator(mode="after")

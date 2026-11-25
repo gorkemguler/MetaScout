@@ -265,6 +265,22 @@ def test_critical_files_and_content_categories_wired_through_scan_request(tmp_pa
     assert captured["content_categories"] == ["secrets", "infra"]
 
 
+def test_images_wired_through_scan_request(tmp_path):
+    client = _client(tmp_path)
+    captured = {}
+
+    def fake_run_scan(cfg, log=None):
+        captured.update(images=cfg.images, image_filetypes=cfg.image_filetypes, max_images=cfg.max_images)
+        return analyze([], targets=cfg.targets)
+
+    with patch("metascout.api.app.run_scan", side_effect=fake_run_scan):
+        resp = client.post("/v1/scans", json={"targets": ["example.com"], "images": True,
+                                              "image_filetypes": [".JPG", "png"], "max_images": 30})
+        _wait_for_job(client, resp.json()["job_id"])
+
+    assert captured == {"images": True, "image_filetypes": ["jpg", "png"], "max_images": 30}
+
+
 def test_engines_default_to_default_engines_when_omitted(tmp_path):
     client = _client(tmp_path)
     captured = {}

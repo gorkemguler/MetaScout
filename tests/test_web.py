@@ -566,3 +566,20 @@ def test_scan_form_page_keeps_the_narrow_column(tmp_path):
     app = create_app(output_dir=str(tmp_path))
     html = app.test_client().get("/").data.decode()
     assert 'main class=""' in html
+
+
+def test_images_default_off_and_wire_when_enabled(tmp_path):
+    app = create_app(output_dir=str(tmp_path))
+    client = app.test_client()
+    seen = []
+
+    def fake_run_scan(cfg, log=None):
+        seen.append(cfg.images)
+        from metascout.metadata.analyzer import analyze
+        return analyze([], targets=cfg.targets)
+
+    assert 'name="images"' in client.get("/").data.decode()
+    with patch("metascout.web.run_scan", side_effect=fake_run_scan):
+        client.post("/scan", data={"targets": "example.com", "engines": ["crawl"]})
+        client.post("/scan", data={"targets": "example.com", "engines": ["crawl"], "images": "on"})
+    assert seen == [False, True]

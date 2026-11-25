@@ -284,7 +284,7 @@ def test_run_scan_discovers_and_downloads_critical_files_when_enabled():
 
     discover_calls = []
 
-    def fake_discover_all(cfg, log=None, *, filetypes=None):
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
         discover_calls.append(filetypes)
         return critical_discovered if filetypes == ["env", "log"] else []
 
@@ -314,7 +314,7 @@ def test_run_scan_critical_files_populated_even_when_no_regular_documents_found(
     cfg = _cfg(critical_files=True, critical_file_types=["env"])
     critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
 
-    def fake_discover_all(cfg, log=None, *, filetypes=None):
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
         return critical_discovered if filetypes == ["env"] else []
 
     def fake_download_documents(documents, **kwargs):
@@ -339,7 +339,7 @@ def test_run_scan_scans_critical_files_content_when_scan_content_enabled():
     doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
     critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
 
-    def fake_discover_all(cfg, log=None, *, filetypes=None):
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
         return critical_discovered if filetypes == ["env"] else []
 
     def fake_download_documents(documents, **kwargs):
@@ -365,7 +365,7 @@ def test_run_scan_does_not_scan_critical_files_content_when_scan_content_disable
     doc_metadata = [DocumentMetadata(url="https://example.com/a.pdf", local_path="/tmp/a.pdf", filetype="pdf")]
     critical_discovered = [DiscoveredDocument(url="https://example.com/.env", source=DiscoverySource.CRAWL, filetype="env")]
 
-    def fake_discover_all(cfg, log=None, *, filetypes=None):
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
         return critical_discovered if filetypes == ["env"] else []
 
     def fake_download_documents(documents, **kwargs):
@@ -472,7 +472,7 @@ def test_run_scan_ignores_files_that_are_public_by_design():
     ] + [DiscoveredDocument(url="https://example.com/backup/.env", source=DiscoverySource.CRAWL, filetype="env"),
          DiscoveredDocument(url="https://example.com/notes/passwords.txt", source=DiscoverySource.CRAWL, filetype="txt")]
 
-    def fake_discover_all(cfg, log=None, *, filetypes=None):
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
         return critical_discovered if filetypes == ["txt", "env"] else []
 
     def fake_download_documents(documents, *, dest_dir, **kwargs):
@@ -486,3 +486,94 @@ def test_run_scan_ignores_files_that_are_public_by_design():
 
     assert sorted(f.url for f in findings.critical_files) == [
         "https://example.com/backup/.env", "https://example.com/notes/passwords.txt"]
+
+
+# --- the opt-in image pass (ScanConfig.images) ---
+
+def _picture(url, **raw):
+    return DocumentMetadata(url=url, local_path=f"/tmp/{url.rsplit('/', 1)[-1]}", filetype="jpg", raw=raw)
+
+
+def test_image_pass_keeps_only_pictures_that_leak_something():
+    cfg = _cfg(images=True, engines=["crawl", "sitemap", "ddgs", "serper", "commoncrawl"],
+               image_filetypes=["jpg", "png"])
+    report = DocumentMetadata(url="https://example.com/r.pdf", local_path="/tmp/r.pdf", filetype="pdf",
+                              raw={"PDF:Author": "jdoe"})
+    pictures = {
+        "https://example.com/u/site.jpg": _picture("https://example.com/u/site.jpg",
+                                                   **{"Composite:GPSPosition": "40.991820 N, 29.024150 E"}),
+        "https://example.com/u/camera.jpg": _picture("https://example.com/u/camera.jpg",
+                                                     **{"IFD0:Model": "EOS R5", "ExifIFD:SerialNumber": "032021000123"}),
+        "https://example.com/u/banner.jpg": _picture("https://example.com/u/banner.jpg",
+                                                     **{"IFD0:Software": "Adobe Photoshop 25.0", "IFD0:Model": "EOS R5"}),
+        "https://example.com/u/logo.png": _picture("https://example.com/u/logo.png"),
+    }
+    calls = []
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
+        calls.append((filetypes, list(cfg.engines), id(cache)))
+        if filetypes == ["jpg", "png"]:
+            return [DiscoveredDocument(url=u, source=DiscoverySource.CRAWL, filetype=u.rsplit(".", 1)[1]) for u in pictures]
+        return [DiscoveredDocument(url="https://example.com/r.pdf", source=DiscoverySource.CRAWL, filetype="pdf")]
+
+    def fake_download(documents, *, dest_dir, **kwargs):
+        return [DownloadedDocument(url=d.url, local_path=f"{dest_dir}/x", filetype=d.filetype, source=d.source)
+                for d in documents]
+
+    def fake_extract(downloaded):
+        return [pictures[d.url] if d.url in pictures else report for d in downloaded]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download), \
+         patch("metascout.pipeline.extract_metadata", side_effect=fake_extract):
+        findings = run_scan(cfg)
+
+    # documents first, then pictures through the engines that can list them, sharing one cache
+    assert [c[0] for c in calls] == [None, ["jpg", "png"]]
+    assert calls[1][1] == ["crawl", "sitemap", "commoncrawl"]
+    assert calls[0][2] == calls[1][2]
+    assert findings.images_scanned == 4
+    assert sorted(d.url for d in findings.documents) == [
+        "https://example.com/r.pdf", "https://example.com/u/camera.jpg", "https://example.com/u/site.jpg"]
+    assert "40.991820 N, 29.024150 E" in findings.geolocation
+    assert set(findings.devices) == {"EOS R5", "032021000123"}
+
+
+def test_image_pass_runs_without_documents_and_respects_its_own_cap():
+    cfg = _cfg(images=True, engines=["crawl"], image_filetypes=["jpg"], max_docs=1, max_images=2)
+    urls = [f"https://example.com/p{n}.jpg" for n in range(5)]
+    downloaded = []
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
+        if filetypes == ["jpg"]:
+            return [DiscoveredDocument(url=u, source=DiscoverySource.CRAWL, filetype="jpg") for u in urls]
+        return []
+
+    def fake_download(documents, *, dest_dir, **kwargs):
+        downloaded.extend(d.url for d in documents)
+        return [DownloadedDocument(url=d.url, local_path="/tmp/x.jpg", filetype="jpg", source=d.source) for d in documents]
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all), \
+         patch("metascout.pipeline.download_documents", side_effect=fake_download), \
+         patch("metascout.pipeline.extract_metadata",
+               side_effect=lambda d: [_picture(x.url, **{"IFD0:Artist": "Jane Photographer"}) for x in d]):
+        findings = run_scan(cfg)
+
+    assert downloaded == urls[:2]  # max_images, not max_docs
+    assert findings.images_scanned == 2 and "Jane Photographer" in findings.usernames
+
+
+def test_image_pass_is_off_by_default():
+    filetypes_seen = []
+
+    def fake_discover_all(cfg, log=None, *, filetypes=None, cache=None):
+        filetypes_seen.append(filetypes)
+        return []
+
+    with patch("metascout.pipeline.exiftool_available", return_value=True), \
+         patch("metascout.pipeline.discover_all", side_effect=fake_discover_all):
+        findings = run_scan(_cfg())
+
+    assert filetypes_seen == [None] and findings.images_scanned == 0

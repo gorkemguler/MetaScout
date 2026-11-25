@@ -34,3 +34,15 @@ def test_json_report_flags_documents_whose_metadata_was_stripped():
     by_url = {d["url"]: d for d in payload["documents"]}
     assert by_url["https://example.gov/cleaned.pdf"]["metadata_stripped"] is True
     assert by_url["https://example.gov/plain.pdf"]["metadata_stripped"] is False
+
+
+def test_json_report_carries_devices_and_the_pictures_read():
+    doc = DocumentMetadata(url="https://example.com/p.jpg", local_path="", filetype="jpg",
+                           raw={"IFD0:Model": "EOS R5", "ExifIFD:SerialNumber": "032021000123"})
+    findings = analyze([doc], targets=["example.com"])
+    findings.images_scanned = 12
+
+    payload = json.loads(render_json_report(findings))
+
+    assert payload["images_scanned"] == 12
+    assert set(payload["findings"]["devices"]) == {"EOS R5", "032021000123"}

@@ -181,3 +181,17 @@ def test_pdf_report_marks_documents_whose_metadata_was_stripped():
     assert "STRIPPED" in en
     assert "1 document(s) had their metadata stripped" in en
     assert "TEMİZLENMİŞ" in tr
+
+
+@pytest.mark.parametrize("lang,heading,note", [("en", "Devices", "picture(s) on the site were read"),
+                                               ("tr", "Cihazlar", "görsel de okundu")])
+def test_render_pdf_report_lists_devices_and_the_pictures_read(lang, heading, note):
+    payload = _payload()
+    payload["findings"]["devices"] = {"Canon EOS R5": {"document_urls": ["https://example.com/live.pdf"],
+                                                       "field_name": "Model"}}
+    payload["images_scanned"] = 40
+
+    text = " ".join(_text(render_pdf_report(payload, lang=lang)).split())
+
+    assert heading in text and "Canon EOS R5" in text
+    assert "40" in text and note in text

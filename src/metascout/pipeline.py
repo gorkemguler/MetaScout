@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -8,7 +9,7 @@ from .config import ScanConfig
 from .content_scan import (
     detect_visual_signature, missing_dependencies, missing_visual_signature_dependencies, scan_document,
 )
-from .discovery import brave_dork_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
+from .discovery import brave_dork_search, commoncrawl_search, crawl_site, ddgs_dork_search, find_subdomains, google_dork_search, serper_dork_search, sitemap_search, wayback_search
 from .downloader import download_documents
 from .metadata import exiftool_available, extract_metadata
 from .metadata.analyzer import analyze
@@ -26,7 +27,8 @@ def _ext_of(url: str) -> str:
     return path.rsplit(".", 1)[-1].lower() if "." in path else ""
 
 
-def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], log: LogFn) -> list[DiscoveredDocument]:
+def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], log: LogFn,
+                            pages: dict | None = None) -> list[DiscoveredDocument]:
     found: dict[str, DiscoveredDocument] = {}
 
     for engine in cfg.engines:
@@ -36,7 +38,7 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], lo
                     host, filetypes,
                     max_pages=cfg.max_crawl_pages, max_depth=cfg.max_crawl_depth,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
-                    respect_robots=cfg.respect_robots,
+                    respect_robots=cfg.respect_robots, page_cache=pages,
                 )
             elif engine == "sitemap":
                 docs = sitemap_search(
@@ -45,6 +47,12 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], lo
                 )
             elif engine == "wayback":
                 docs = wayback_search(
+                    host, filetypes,
+                    timeout=cfg.request_timeout, user_agent=cfg.user_agent,
+                    max_results=max(cfg.max_docs, 100),
+                )
+            elif engine == "commoncrawl":
+                docs = commoncrawl_search(
                     host, filetypes,
                     timeout=cfg.request_timeout, user_agent=cfg.user_agent,
                     max_results=max(cfg.max_docs, 100),
@@ -92,15 +100,23 @@ def _run_discovery_for_host(host: str, cfg: ScanConfig, filetypes: list[str], lo
     return list(found.values())
 
 
-def discover_all(cfg: ScanConfig, log: LogFn = _noop_log, *, filetypes: list[str] | None = None) -> list[DiscoveredDocument]:
+def discover_all(cfg: ScanConfig, log: LogFn = _noop_log, *, filetypes: list[str] | None = None,
+                 cache: dict | None = None) -> list[DiscoveredDocument]:
     """Runs discovery across all targets/subdomains via cfg.engines.
 
     `filetypes` defaults to cfg.filetypes (the normal document search); pass
     cfg.critical_file_types instead to run the same discovery engines for
     the opt-in "critical files" pass (see ScanConfig.critical_files) without
     duplicating the target/subdomain-enumeration loop below.
+
+    A scan runs this once per kind of file it looks for. Give every one of
+    those calls the same `cache` dict and the later ones reuse the crawled
+    pages and subdomain lists of the first instead of fetching them again.
     """
     filetypes = cfg.filetypes if filetypes is None else filetypes
+    cache = {} if cache is None else cache
+    pages = cache.setdefault("pages", {})
+    subdomains = cache.setdefault("subdomains", {})
 
     if "google" in cfg.engines:
         log(
@@ -116,8 +132,10 @@ def discover_all(cfg: ScanConfig, log: LogFn = _noop_log, *, filetypes: list[str
         hosts = [target]
 
         if cfg.include_subdomains:
-            log(f"enumerating subdomains for {target} via crt.sh ...")
-            subs = find_subdomains(target, timeout=cfg.request_timeout, user_agent=cfg.user_agent)
+            if target not in subdomains:
+                log(f"enumerating subdomains for {target} via crt.sh ...")
+                subdomains[target] = find_subdomains(target, timeout=cfg.request_timeout, user_agent=cfg.user_agent)
+            subs = subdomains[target]
             log(f"found {len(subs)} subdomain(s) for {target}")
             if len(subs) > cfg.max_subdomains:
                 log(f"capping to --max-subdomains={cfg.max_subdomains}")
@@ -126,7 +144,7 @@ def discover_all(cfg: ScanConfig, log: LogFn = _noop_log, *, filetypes: list[str
 
         for host in hosts:
             log(f"discovery on {host} via {', '.join(cfg.engines)} ...")
-            docs = _run_discovery_for_host(host, cfg, filetypes, log)
+            docs = _run_discovery_for_host(host, cfg, filetypes, log, pages)
             log(f"  found {len(docs)} link(s) on {host}")
             for d in docs:
                 found.setdefault(d.url, d)
@@ -146,7 +164,9 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
             "`brew install exiftool` (macOS) or `apt install libimage-exiftool-perl` (Debian/Ubuntu)."
         )
 
-    discovered = discover_all(cfg, log)
+    # Pages crawled and subdomains found, shared by every discovery pass below.
+    cache: dict = {}
+    discovered = discover_all(cfg, log, cache=cache)
 
     if cfg.manual_urls:
         log(f"adding {len(cfg.manual_urls)} manually provided URL(s) ...")
@@ -162,7 +182,6 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     doc_metadata: list = []
     if not discovered:
         log("No documents discovered. Nothing to analyze.")
-        findings = analyze([], targets=cfg.targets)
     else:
         if len(discovered) > cfg.max_docs:
             log(f"Capping {len(discovered)} discovered documents to max_docs={cfg.max_docs}")
@@ -182,8 +201,17 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
         log("extracting metadata with exiftool ...")
         doc_metadata = extract_metadata(downloaded)
 
+    # Independent of the document search, like the critical files below: a
+    # site with no documents at all can still have a geotagged photo on it.
+    pictures: list = []
+    images_scanned = 0
+    if cfg.images:
+        pictures, images_scanned = _read_images(cfg, log, cache, skip_urls={d.url for d in discovered})
+
+    if doc_metadata or pictures:
         log("analyzing metadata ...")
-        findings = analyze(doc_metadata, targets=cfg.targets)
+    findings = analyze(doc_metadata + pictures, targets=cfg.targets)
+    findings.images_scanned = images_scanned
 
     # Independent of the main document search on purpose (see
     # ScanConfig.critical_files / DEFAULT_CRITICAL_FILETYPES): runs even if
@@ -191,7 +219,7 @@ def run_scan(cfg: ScanConfig, log: LogFn = _noop_log) -> ScanFindings:
     # exposed .env/.log/.sql-style files, not pdf/doc/... documents.
     critical_downloaded: list = []
     if cfg.critical_files:
-        critical_downloaded = _discover_and_download_critical_files(cfg, log)
+        critical_downloaded = _discover_and_download_critical_files(cfg, log, cache)
     findings.critical_files = [
         CriticalFile(url=d.url, filetype=d.filetype, source=d.source, size_bytes=d.size_bytes, error=d.error)
         for d in critical_downloaded
@@ -227,14 +255,14 @@ def _public_by_design(url: str) -> bool:
     return urlparse(url).path.rsplit("/", 1)[-1].lower() in _PUBLIC_BY_DESIGN
 
 
-def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn) -> list[DownloadedDocument]:
+def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn, cache: dict | None = None) -> list[DownloadedDocument]:
     """Second, independent discovery pass for plaintext/config-style
     "critical" files (see ScanConfig.critical_files / DEFAULT_CRITICAL_FILETYPES)
     — same discovery engines as the main document search, just a different
     filetype list, kept in its own downloads/ subfolder and report section.
     """
     log(f"discovering critical/sensitive files ({', '.join(cfg.critical_file_types)}) ...")
-    discovered = [d for d in discover_all(cfg, log, filetypes=cfg.critical_file_types)
+    discovered = [d for d in discover_all(cfg, log, filetypes=cfg.critical_file_types, cache=cache)
                   if not _public_by_design(d.url)]
     log(f"  found {len(discovered)} critical file candidate(s)")
     if not discovered:
@@ -253,6 +281,56 @@ def _discover_and_download_critical_files(cfg: ScanConfig, log: LogFn) -> list[D
     ok_count = sum(1 for d in downloaded if not d.error)
     log(f"  {ok_count}/{len(downloaded)} critical file(s) downloaded successfully")
     return downloaded
+
+
+# The engines that find files by following links or listing a host's URLs.
+# The search-engine dorks spend one quota-counted "filetype:" query per
+# extension, and web search does not answer those for pictures anyway.
+_IMAGE_ENGINES = {"crawl", "sitemap", "wayback", "commoncrawl"}
+
+
+def _leaking_urls(probe: ScanFindings) -> set[str]:
+    """Pictures worth a line in the report: those with a location, a person
+    or account, an address, an internal path or host, a classification label
+    or a device serial number. The editing software and a bare camera model
+    are on most photos and say little by themselves; they are reported only
+    for a picture that made it here."""
+    urls: set[str] = set()
+    for bucket in (probe.geolocation, probe.usernames, probe.emails, probe.internal_paths,
+                   probe.servers_and_printers, probe.classification_labels):
+        for finding in bucket.values():
+            urls.update(finding.document_urls)
+    for finding in probe.devices.values():
+        if "serial" in finding.field_name.lower():
+            urls.update(finding.document_urls)
+    return urls
+
+
+def _read_images(cfg: ScanConfig, log: LogFn, cache: dict, *, skip_urls: set[str]) -> tuple[list, int]:
+    """The opt-in image pass (ScanConfig.images): finds the pictures the
+    site shows, reads their metadata and returns (the ones that leak
+    something, how many were read). The rest are dropped rather than listed:
+    a few hundred pictures with nothing in them would bury the documents."""
+    engines = [e for e in cfg.engines if e in _IMAGE_ENGINES]
+    log(f"discovering pictures ({', '.join(cfg.image_filetypes)}) ...")
+    discovered = [d for d in discover_all(replace(cfg, engines=engines), log, filetypes=cfg.image_filetypes, cache=cache)
+                  if d.url not in skip_urls]
+    log(f"  found {len(discovered)} picture(s)")
+    if not discovered:
+        return [], 0
+    if len(discovered) > cfg.max_images:
+        log(f"  capping to max_images={cfg.max_images}")
+        discovered = discovered[: cfg.max_images]
+
+    downloaded = download_documents(
+        discovered, dest_dir=os.path.join(cfg.output_dir, "images"), concurrency=cfg.concurrency,
+        timeout=cfg.request_timeout, max_bytes=cfg.max_download_bytes, user_agent=cfg.user_agent,
+    )
+    read = [m for m in extract_metadata(downloaded) if not m.error]
+    leaking = _leaking_urls(analyze(read, targets=cfg.targets))
+    kept = [m for m in read if m.url in leaking]
+    log(f"  {len(kept)} of {len(read)} picture(s) read carry something worth reporting")
+    return kept, len(read)
 
 
 def _scan_content(doc_metadata, content_categories: list[str], log: LogFn) -> list:

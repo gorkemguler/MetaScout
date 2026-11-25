@@ -48,8 +48,9 @@ def extract_text(local_path: str, filetype: str) -> str:
             return _extract_plain_text(local_path)
     except Exception:
         return ""
-    # .doc/.xls/.ppt (legacy binary Office formats) and anything else:
-    # not supported without extra heavyweight dependencies (e.g. olefile).
+    # .doc/.xls/.ppt (legacy binary Office formats) and anything else: their
+    # text sits in format-specific record layouts not parsed here. (The
+    # pictures inside them are read for metadata, see metadata/ole_media.py.)
     return ""
 
 

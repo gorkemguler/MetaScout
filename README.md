@@ -42,12 +42,14 @@
 - [MCP server](#mcp-server-optional)
 - [Docker](#docker)
 - [Wayback Machine discovery](#wayback-machine-discovery)
+- [Common Crawl discovery](#common-crawl-discovery)
 - [Keyless search with DDGS](#keyless-search-with-ddgs)
 - [Subdomain enumeration](#subdomain-enumeration)
 - [Content scanning for personal data (PII)](#content-scanning-for-personal-data-optional)
   - [Visual (wet) signature detection](#visual-wet-signature-detection--experimental-separately-opt-in)
   - [OCR fallback for scanned documents](#ocr-fallback-for-scanned-documents)
 - [Critical / sensitive files discovery](#critical--sensitive-files-discovery-optional)
+- [Pictures on the site](#pictures-on-the-site-optional)
 - [PDF report](#pdf-report-optional)
 - [Search engine API keys](#search-engine-api-keys-optional)
 - [Full CLI reference](#full-cli-reference)
@@ -85,6 +87,8 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 - **GPS coordinates**, when a photo with location EXIF data (e.g. a phone
   photo pasted into a Word doc) is embedded in a document — a link to view
   it on a map is included in the report
+- **Devices**: the camera, phone or scanner a photo was taken with, and its
+  serial number
 - **Metadata that was deliberately stripped.** ExifTool doesn't rewrite a PDF
   to remove metadata: it appends an incremental update that stops pointing at
   the old Info dictionary and XMP, leaving the original bytes in the file and
@@ -99,7 +103,9 @@ extracts their metadata with [ExifTool](https://exiftool.org/), and reports:
 
 Embedded content is read too, not just the file's own metadata: the images
 and Illustrator data placed inside a PDF (exiftool `-ee`), and the pictures
-inside DOCX/XLSX/PPTX/ODF files, each with its own EXIF/XMP.
+inside DOCX/XLSX/PPTX/ODF files and old binary DOC/XLS/PPT files, each with
+its own EXIF/XMP. With `--images` the pictures shown on the site are read as
+well (see [Pictures on the site](#pictures-on-the-site-optional)).
 
 ## Features
 
@@ -746,6 +752,26 @@ that way, and `report.json` carries the snapshot address in each document's
 public through the archive — worth knowing when you decide what to do about
 it.
 
+## Common Crawl discovery
+
+The `commoncrawl` engine asks [Common Crawl](https://commoncrawl.org)'s index
+which files its crawler has seen on a target host, in its two newest crawls.
+Like Wayback it is free, needs no key and turns up files that are no longer
+linked from the site; it comes from a different crawler, so the two find
+different files.
+
+```bash
+metascout scan example.com --engines crawl,sitemap,wayback,commoncrawl,ddgs
+```
+
+It is **not** one of the default engines: the index takes several seconds a
+query and regularly answers 502/504. A failed query is retried once; after
+three failures in a row the engine stops asking for ten minutes instead of
+waiting out a timeout for every subdomain, and the scan log says why it
+found nothing. Common Crawl keeps only a cut-down copy of large files, so a
+document gone from the live site is fetched from the Wayback Machine's
+capture of the same date instead.
+
 ## Keyless search with DDGS
 
 The `ddgs` engine wraps [DDGS](https://pypi.org/project/ddgs/), a Python
@@ -840,10 +866,10 @@ values. Emails/phones and the weak address/DOB hints are shown as found,
 since that's already the point of surfacing them.
 
 Text extraction covers PDF (via `pypdf`), `.docx`/`.xlsx`/`.pptx`, and
-`.odt`/`.ods`/`.odp`. Legacy binary Office formats (`.doc`/`.xls`/`.ppt`)
-aren't supported — they'd need a much heavier dependency (`olefile`) for
-comparatively rare wins, so they're skipped (metadata scanning still works
-on them as normal).
+`.odt`/`.ods`/`.odp`. The text of legacy binary Office files (`.doc`/`.xls`/
+`.ppt`) isn't extracted: their text is stored in per-format record layouts
+that are a project of their own. Their metadata, and the pictures inside
+them, are read as normal.
 
 ### Visual (wet) signature detection — EXPERIMENTAL, separately opt-in
 
@@ -1013,6 +1039,35 @@ with only critical files and no regular documents still produces a full
 report (risk badge included) instead of the old "nothing to analyze" dead
 end.
 
+## Pictures on the site (optional)
+
+Documents are not the only files that carry metadata: a photo uploaded
+straight from a phone or camera records where it was taken, on which device
+(model and serial number) and often by whom. `--images` runs a third
+discovery pass for the pictures the site shows and reads them the same way.
+
+```bash
+metascout scan example.com --images
+```
+
+- **What is found.** `<img>` tags (including the `data-src`/`srcset` that
+  lazy-loading themes use), `<picture>` sources, `og:image`/`twitter:image`,
+  image sitemaps, and the `wayback`/`commoncrawl` listings. A CMS-resized copy
+  such as `photo-300x200.jpg` is followed back to the original upload
+  `photo.jpg`, which is the one that usually still has its EXIF data. Files on
+  the site's other hosts (`cdn.example.com`, `static.example.com`) count too.
+- **What is reported.** Only pictures that leak something — a GPS position, a
+  person or account, an email, an internal path, a classification label or a
+  device serial number. The rest are counted ("120 pictures read") but not
+  listed, so a few hundred stock photos don't bury the documents.
+- **Limits.** `--max-images` (200) is separate from `--max-docs`; extensions
+  come from `--image-filetypes`. The search-engine dorks are not used for
+  pictures. Pages are crawled once per scan and shared by every pass.
+
+Camera, phone and scanner models and their serial numbers — from pictures on
+the site or inside documents — have their own **Devices** section in the
+report. A serial number ties every picture taken with one device together.
+
 ## PDF report (optional)
 
 Alongside the HTML and JSON reports, MetaScout can produce a **PDF** — the
@@ -1129,7 +1184,7 @@ metascout update --help
 | `--targets-file` | – | File with one domain/URL per line (`#` for comments) |
 | `--urls-file` | – | File with one full document URL per line to scan directly, skipping discovery for those (`#` for comments) |
 | `--filetypes` | `pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp` | File extensions to look for |
-| `--engines` | `crawl,sitemap,wayback,ddgs` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,google,serper,brave,ddgs` |
+| `--engines` | `crawl,sitemap,wayback,ddgs` (+`google`/`serper`/`brave` auto-added if their API key is in `.env`) | Comma-separated: `crawl,sitemap,wayback,commoncrawl,google,serper,brave,ddgs`; `commoncrawl` is only used when named (see [Common Crawl](#common-crawl-discovery)) |
 | `--subdomains` / `--no-subdomains` | off | Enumerate subdomains via crt.sh |
 | `--max-subdomains` | `20` | Maximum subdomains to scan |
 | `--max-docs` | `50` | Maximum documents to download and analyze |
@@ -1147,6 +1202,9 @@ metascout update --help
 | `--visual-signature` / `--no-visual-signature` | off | **EXPERIMENTAL**, independent of `--scan-content`: visual (image-based) signature detection; slow (see [above](#visual-wet-signature-detection--experimental-separately-opt-in)), needs `pip install 'metascout[visual-signature]'` + ImageMagick + Ghostscript |
 | `--critical-files` / `--no-critical-files` | off | Second discovery pass for plaintext/config-style files (see [above](#critical--sensitive-files-discovery-optional)) |
 | `--critical-file-types` | `txt,log,conf,cfg,ini,env,yml,yaml,sql,bak` | Comma-separated subset, only used with `--critical-files` |
+| `--images` / `--no-images` | off | Also read the pictures the site shows (see [Pictures on the site](#pictures-on-the-site-optional)) |
+| `--image-filetypes` | `jpg,jpeg,png,tif,tiff,webp,heic` | Comma-separated, only used with `--images` |
+| `--max-images` | `200` | Maximum pictures to download and read; separate from `--max-docs` |
 | `--json-report` / `--no-json-report` | on | Produce a JSON report |
 | `--html-report` / `--no-html-report` | on | Produce an HTML report |
 | `--report-lang` | `en` | HTML report language: `en` or `tr` |
@@ -1249,12 +1307,14 @@ src/metascout/
 │   ├── crawler.py         direct site crawling (robots.txt aware)
 │   ├── sitemap.py         sitemap.xml / sitemap index parsing
 │   ├── wayback.py         Wayback Machine (archive.org) CDX API discovery
+│   ├── commoncrawl.py     Common Crawl index discovery (opt-in engine)
 │   ├── search_engines.py  Google/Serper/Brave dork search
 │   ├── ddgs_search.py     keyless DDGS (DuckDuckGo/other engines) dork search
 │   └── subdomains.py      passive subdomain discovery via crt.sh
 ├── downloader.py           concurrent downloads, size cap, sha256
 ├── metadata/
 │   ├── exiftool_wrapper.py exiftool subprocess wrapper
+│   ├── ole_media.py        pictures inside old binary Office files (.doc/.xls/.ppt)
 │   └── analyzer.py         regex + field-based extraction, per-target counts
 ├── content_scan/            opt-in document *content* PII scan (--scan-content)
 │   ├── text_extract.py     PDF (pypdf) / Office / OpenDocument text extraction

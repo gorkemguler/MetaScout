@@ -43,7 +43,7 @@ _WARN = "#b26a12"
 _GOOD = "#1f8a4c"
 
 _CATEGORIES = ["usernames", "emails", "software", "operating_systems", "internal_paths",
-               "servers_and_printers", "geolocation", "classification_labels"]
+               "servers_and_printers", "geolocation", "classification_labels", "devices"]
 _CRITICAL_CONTENT = {"tc_kimlik", "iban", "credit_card"}
 # Kept in step with the analyzer's own RESTRICTED_LABEL_RE, but re-declared
 # here so a PDF can be built from a report.json without importing the
@@ -69,7 +69,7 @@ _STRINGS = {
         "usernames": "Usernames", "emails": "Email Addresses", "software": "Software & Versions",
         "operating_systems": "Operating Systems", "internal_paths": "Internal File Paths",
         "servers_and_printers": "Servers & Printers", "geolocation": "Geolocation (GPS)",
-        "classification_labels": "Classification Labels",
+        "classification_labels": "Classification Labels", "devices": "Devices",
         "restricted_note": "Some of these documents carry a label saying they are not meant to be public. "
                            "The label is in the document's own metadata; the document itself is published.",
         "col_value": "Value", "col_field": "Metadata field", "col_docs": "Docs", "col_seen": "First seen in",
@@ -86,6 +86,8 @@ _STRINGS = {
         "archive_note": "{n} document(s) are no longer live on the site; the copy came from the Wayback "
                         "Machine archive and is tagged ARCHIVE below. Removed from the site, still public "
                         "through the archive.",
+        "images_note": "{n} picture(s) on the site were read as well; only the ones that leak something "
+                       "(a location, a name, a device serial number) are listed.",
         "errors": "Errors", "errors_note": "Documents that could not be downloaded or read.",
         "empty": "No findings in this category.",
         "truncated": "… and {n} more (see report.json for the full list).",
@@ -106,7 +108,7 @@ _STRINGS = {
         "usernames": "Kullanıcı Adları", "emails": "E-posta Adresleri", "software": "Yazılım & Sürümler",
         "operating_systems": "İşletim Sistemleri", "internal_paths": "İç Dosya Yolları",
         "servers_and_printers": "Sunucular & Yazıcılar", "geolocation": "Konum (GPS)",
-        "classification_labels": "Gizlilik Etiketleri",
+        "classification_labels": "Gizlilik Etiketleri", "devices": "Cihazlar",
         "restricted_note": "Bu belgelerin bir kısmı, herkese açık olmaması gerektiğini söyleyen bir gizlilik "
                            "etiketi taşıyor. Etiket belgenin metadata'sında duruyor; belgenin kendisi yayında.",
         "col_value": "Değer", "col_field": "Metadata alanı", "col_docs": "Belge", "col_seen": "İlk görüldüğü belge",
@@ -123,6 +125,8 @@ _STRINGS = {
         "archive_note": "{n} belge sitede artık yayında değil; kopya Wayback Machine arşivinden alındı ve "
                         "aşağıda ARŞİV etiketiyle işaretlendi. Siteden kaldırılmış olsalar da arşiv "
                         "üzerinden hâlâ herkese açıklar.",
+        "images_note": "Sitedeki {n} görsel de okundu; yalnızca bir şey sızdıranlar (konum, ad, cihaz seri "
+                       "numarası) listelendi.",
         "errors": "Hatalar", "errors_note": "İndirilemeyen veya okunamayan belgeler.",
         "empty": "Bu kategoride bulgu yok.",
         "truncated": "… ve {n} kayıt daha (tam liste için report.json).",
@@ -285,6 +289,9 @@ def _documents_section(payload: dict, t: dict, st: dict, width: float) -> list:
     archived = [d for d in docs if d.get("archive_url")]
     if archived:
         story.append(Paragraph(t["archive_note"].format(n=len(archived)), st["muted"]))
+        story.append(Spacer(1, 4))
+    if payload.get("images_scanned"):
+        story.append(Paragraph(t["images_note"].format(n=payload["images_scanned"]), st["muted"]))
         story.append(Spacer(1, 4))
     stripped = [d for d in docs if d.get("metadata_stripped")]
     if stripped:
